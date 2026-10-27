@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="UMBC Stormwater GIS — a lightweight frontend prototype for viewing campus stormwater facilities and planning inspections.">
+  <meta name="theme-color" content="#142033">
+  <title>UMBC Stormwater | Campus GIS Workspace</title>
+  <link rel="stylesheet" href="styles.css">
+  <!-- The frontend is still static HTML/CSS/JS. OAuth is managed by Esri, not by our server. -->
+  <script src="arcgis-config.js"></script>
+  <script type="module" src="https://js.arcgis.com/5.1/"></script>
+  <script type="module" src="map.js"></script>
+</head>
+<body>
+  <!-- Icons are inline so the starter website has no icon library or framework dependency. -->
+  <svg xmlns="http://www.w3.org/2000/svg" class="svg-sprite" aria-hidden="true" focusable="false">
+    <symbol id="i-drop" viewBox="0 0 24 24"><path d="M12 2.5c-2.5 4-7 9.2-7 13.1A7 7 0 0 0 19 15.6C19 11.7 14.5 6.5 12 2.5Z"/><path d="M9 16a3 3 0 0 0 3 3"/></symbol>
+    <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></symbol>
+    <symbol id="i-map" viewBox="0 0 24 24"><path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3Z"/><path d="M9 3v15M15 6v15"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24"><path d="M20 10c0 5-8 11.5-8 11.5S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></symbol>
+    <symbol id="i-clipboard" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="16" rx="2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h6"/></symbol>
+    <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 2 9 5-9 5-9-5 9-5ZM3 12l9 5 9-5M3 17l9 5 9-5"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/></symbol>
+    <symbol id="i-arrow-up" viewBox="0 0 24 24"><path d="M7 17 17 7M8 7h9v9"/></symbol>
+    <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M4 12h16m-7-7 7 7-7 7"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="m12 2 9 4v6c0 5-3.6 8.5-9 10-5.4-1.5-9-5-9-10V6Z"/><path d="m8.5 12 2.5 2.5 4.5-5"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m4 12 5 5L20 6"/></symbol>
+    <symbol id="i-picture" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 16-5-5-9 10"/></symbol>
+  </svg>
+  <a class="skip-link" href="#main-content">Skip to content</a>
+
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Primary navigation">
+      <a class="brand" href="#overview" aria-label="UMBC Stormwater home">
+        <span class="brand-mark"><svg class="icon"><use href="#i-drop"></use></svg></span>
+        <span class="brand-words"><strong>UMBC</strong><span>STORMWATER GIS</span></span>
+      </a>
+
+      <div class="sidebar-inner">
+        <nav class="side-nav" aria-label="Workspace sections">
+          <p class="nav-heading">WORKSPACE</p>
+          <a class="nav-item" href="#overview"><svg class="icon"><use href="#i-grid"></use></svg><span>Overview</span></a>
+          <a class="nav-item nav-active" href="#campus-map" aria-current="location"><svg class="icon"><use href="#i-map"></use></svg><span>Campus map</span></a>
+          <a class="nav-item" href="#inspection-draft"><svg class="icon"><use href="#i-clipboard"></use></svg><span>Inspections</span></a>
+          <a class="nav-item" href="#facility-guide"><svg class="icon"><use href="#i-pin"></use></svg><span>Facilities</span></a>
+          <p class="nav-heading nav-heading-secondary">PROJECT</p>
+          <a class="nav-item" href="#about-project"><svg class="icon"><use href="#i-info"></use></svg><span>About this project</span></a>
+        </nav>
+
+        <div class="side-bottom">
+          <div class="prototype-indicator"><span class="indicator-dot"></span> Frontend prototype</div>
+          <p>Team 8 · CMSC 447</p>
+          <p>Made for UMBC Facilities</p>
+        </div>
+      </div>
+    </aside>
+
+    <main id="main-content" class="main-content">
+      <header class="topbar" id="overview">
+        <div class="breadcrumb">Workspace <span aria-hidden="true">/</span> <strong>Campus overview</strong></div>
+        <div class="topbar-right"><span class="topbar-dot"></span> Static HTML + CSS + JS <span class="topbar-divider"></span> <span class="topbar-version">VERSION 01</span></div>
+      </header>
+
+      <div class="content-wrap">
+        <section class="hero" aria-labelledby="page-title">
+          <div class="hero-copy">
+            <div class="eyebrow"><span class="eyebrow-rule"></span> UMBC FACILITIES · GIS WORKSPACE</div>
+            <h1 id="page-title">Campus stormwater,<br><span>all in one place.</span></h1>
+            <p>Explore UMBC's existing stormwater map and prepare for a more connected way to inspect, document, and manage campus facilities.</p>
+            <div class="hero-actions">
+              <a class="btn btn-primary" href="#campus-map">Explore the map <svg class="icon"><use href="#i-arrow-right"></use></svg></a>
+              <a class="btn btn-secondary" href="#inspection-draft">View inspection layout</a>
+            </div>
+          </div>
+          <div class="hero-art" aria-hidden="true">
+            <span class="orbit orbit-one"></span><span class="orbit orbit-two"></span><span class="orbit orbit-three"></span>
+            <div class="hero-art-core"><svg class="icon"><use href="#i-drop"></use></svg></div>
+            <span class="art-point point-one"></span><span class="art-point point-two"></span><span class="art-point point-three"></span>
+            <div class="art-label">GIS / CAMPUS</div>
+          </div>
+        </section>
+
+        <section class="status-strip" aria-label="Project status">
+          <div class="status-item"><span class="status-symbol amber"><svg class="icon"><use href="#i-map"></use></svg></span><div><p>MAP SOURCE</p><strong>UMBC ArcGIS</strong></div></div>
+          <div class="status-item"><span class="status-symbol blue"><svg class="icon"><use href="#i-clipboard"></use></svg></span><div><p>INSPECTIONS</p><strong>UI preview only</strong></div></div>
+          <div class="status-item"><span class="status-symbol lilac"><svg class="icon"><use href="#i-shield"></use></svg></span><div><p>BACKEND</p><strong>Not connected yet</strong></div></div>
+        </section>
+
+        <section id="campus-map" class="section-block" aria-labelledby="map-section-title">
+          <div class="section-heading">
+            <div><div class="eyebrow eyebrow-dark">01 / INTERACTIVE VIEW</div><h2 id="map-section-title">Campus stormwater map</h2><p>Load the original UMBC WebMap with the ArcGIS Maps SDK and authorized organizational sign-in.</p></div>
+            <a class="text-link" href="https://umbc-ges.maps.arcgis.com/apps/mapviewer/index.html?webmap=d59cb5cc77914e6c96631b856c667129" target="_blank" rel="noopener noreferrer">Open in ArcGIS <svg class="icon"><use href="#i-arrow-up"></use></svg></a>
+          </div>
+
+          <div class="map-layout">
+            <div class="map-card">
+              <div class="map-card-header"><div class="map-card-title"><svg class="icon"><use href="#i-layers"></use></svg><span>UMBC Stormwater Facilities</span></div><span class="map-tag">EXTERNAL ARCGIS DATA</span></div>
+              <div class="map-access-note" role="note">
+                <div class="map-access-copy"><strong>ArcGIS organizational map</strong><span id="map-access-description">To view a secured UMBC WebMap here, configure an approved ArcGIS OAuth client ID.</span></div>
+                <a class="btn btn-primary map-access-button" href="https://umbc-ges.maps.arcgis.com/apps/mapviewer/index.html?webmap=d59cb5cc77914e6c96631b856c667129" target="_blank" rel="noopener noreferrer">Open full map <svg class="icon"><use href="#i-arrow-up"></use></svg></a>
+              </div>
+              <div class="map-frame" id="map-surface" aria-label="UMBC stormwater map workspace">
+                <div class="map-placeholder" id="map-placeholder" role="status" aria-live="polite">
+                  <span class="map-placeholder-icon"><svg class="icon"><use href="#i-layers"></use></svg></span>
+                  <h3 id="map-status-title">Setting up ArcGIS access</h3>
+                  <p id="map-status-body">Checking your local ArcGIS configuration…</p>
+                  <button class="btn btn-primary" id="arcgis-sign-in" type="button" hidden>Sign in to ArcGIS</button>
+                  <p class="map-status-help" id="map-status-help">You can always use “Open full map” to view the working original.</p>
+                </div>
+              </div>
+              <div class="map-footer"><span><svg class="icon"><use href="#i-info"></use></svg> No iframe: the ArcGIS SDK will load the original WebMap after authorized sign-in.</span><a href="https://umbc-ges.maps.arcgis.com/apps/mapviewer/index.html?webmap=d59cb5cc77914e6c96631b856c667129" target="_blank" rel="noopener noreferrer">Full map <svg class="icon"><use href="#i-arrow-up"></use></svg></a></div>
+            </div>
+
+            <aside class="details-card" aria-labelledby="facility-details-title">
+              <div class="details-top"><div><div class="details-overline">FACILITY CONTEXT</div><h3 id="facility-details-title">Facility details</h3></div><span class="soon-label">NEXT PHASE</span></div>
+              <div class="empty-facility"><span class="pin-circle"><svg class="icon"><use href="#i-pin"></use></svg></span><strong>No facility selected</strong><p>Explore stormwater facilities in the SDK map. Connecting selected features to this panel is the next frontend milestone.</p></div>
+              <dl class="details-list"><div><dt>Asset tag</dt><dd>—</dd></div><div><dt>BMP type</dt><dd>—</dd></div><div><dt>Location</dt><dd>—</dd></div><div><dt>Last inspection</dt><dd>—</dd></div></dl>
+              <a class="btn btn-outline full-width" href="#inspection-draft">Preview inspection form <svg class="icon"><use href="#i-arrow-right"></use></svg></a>
+              <p class="details-note">Map popups work inside ArcGIS; this side panel is a static preview for now.</p>
+            </aside>
+          </div>
+        </section>
+
+        <section id="facility-guide" class="section-block workflow-block" aria-labelledby="workflow-title">
+          <div class="section-heading compact-heading"><div><div class="eyebrow eyebrow-dark">02 / THE WORKFLOW</div><h2 id="workflow-title">From map to maintenance</h2><p>The planned workflow connects a campus asset to a reliable inspection record.</p></div></div>
+          <div class="workflow-grid">
+            <article class="workflow-card"><div class="workflow-top"><span class="workflow-icon"><svg class="icon"><use href="#i-pin"></use></svg></span><span class="workflow-number">01</span></div><h3>Find a facility</h3><p>Locate a stormwater asset using the campus GIS map and view its available attributes.</p><span class="workflow-tag">ARCGIS SDK MAP</span></article>
+            <article class="workflow-card"><div class="workflow-top"><span class="workflow-icon"><svg class="icon"><use href="#i-clipboard"></use></svg></span><span class="workflow-number">02</span></div><h3>Complete an inspection</h3><p>Record the inspection type, condition, observations, and supporting photos.</p><span class="workflow-tag">FORM LAYOUT PREVIEW</span></article>
+            <article class="workflow-card"><div class="workflow-top"><span class="workflow-icon"><svg class="icon"><use href="#i-layers"></use></svg></span><span class="workflow-number">03</span></div><h3>Track outcomes</h3><p>Review historical reports and follow up on facilities needing corrective action.</p><span class="workflow-tag">BACKEND PHASE</span></article>
+          </div>
+        </section>
+
+        <section id="inspection-draft" class="section-block form-section" aria-labelledby="inspection-title">
+          <div class="section-heading"><div><div class="eyebrow eyebrow-dark">03 / INTERFACE PREVIEW</div><h2 id="inspection-title">Inspection form</h2><p>A starting point for the inspection experience. Try the native form controls below.</p></div><span class="preview-pill"><span></span> UI ONLY · NOT SAVED</span></div>
+          <div class="form-shell">
+            <div class="form-intro"><div class="form-intro-icon"><svg class="icon"><use href="#i-clipboard"></use></svg></div><div><strong>New stormwater inspection</strong><p>This is a visual prototype. Entries are not submitted, stored, emailed, or attached to an actual facility.</p></div></div>
+            <form class="inspection-form" autocomplete="off">
+              <!-- Disabled default submit prevents Enter from sending preview data anywhere. -->
+              <button type="submit" disabled hidden aria-hidden="true"></button>
+              <fieldset><legend>Facility information <span>Manual entry for preview; future version auto-fills from the map</span></legend>
+                <div class="form-grid"><label>Asset tag<input type="text" name="asset_tag" placeholder="Enter an asset tag"></label><label>BMP type<select name="bmp_type"><option value="">Select BMP type</option><option>Bioretention</option><option>Detention basin</option><option>Infiltration</option><option>Swale</option><option>Other / unknown</option></select></label><label class="full-span">Campus location<input type="text" name="location" placeholder="Enter a location or description"></label></div>
+              </fieldset>
+              <fieldset><legend>Inspection details <span>Preview controls only</span></legend>
+                <div class="form-grid"><label>Inspection type<select name="inspection_type"><option value="">Select inspection type</option><option>Routine</option><option>Follow-up</option><option>Post-storm</option><option>Other</option></select></label><label>Inspection result<select name="inspection_result"><option value="">Select result</option><option>Pass</option><option>Fail</option><option>Needs verification</option></select></label><label class="full-span">Observations<textarea name="observations" rows="4" placeholder="Describe the facility condition, findings, and recommended next steps..."></textarea></label><label class="full-span">Supporting photos <span class="label-hint">(files are not uploaded)</span><span class="file-input-wrap"><svg class="icon"><use href="#i-picture"></use></svg><input type="file" name="photos" accept="image/*" multiple></span></label></div>
+              </fieldset>
+              <div class="form-actions"><span><svg class="icon"><use href="#i-info"></use></svg> No data leaves this page.</span><button class="btn btn-muted" type="reset">Clear form</button><button class="btn btn-disabled" type="button" disabled title="Backend submission will be added later">Submit inspection · coming later</button></div>
+            </form>
+          </div>
+        </section>
+
+        <section id="about-project" class="about-strip" aria-label="Project information"><span class="about-icon"><svg class="icon"><use href="#i-drop"></use></svg></span><div><h2>Built for a better campus workflow.</h2><p>Frontend foundation for UMBC's stormwater inspection project. The ArcGIS map supports authorized user sign-in; later development will connect selected features, inspections, and reports.</p></div><a href="https://github.com/rodriguezzfabricio/stormwater-GIS-Team-8" target="_blank" rel="noopener noreferrer">Team repository <svg class="icon"><use href="#i-arrow-up"></use></svg></a></section>
+        <footer class="footer"><span>© 2026 · UMBC Stormwater GIS · Team 8</span><span>Static prototype · No database connection</span></footer>
+      </div>
+    </main>
+  </div>
+</body>
+</html>
