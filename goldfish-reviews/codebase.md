@@ -1,0 +1,20 @@
+Read attestation: fully read the following exact files; no missing required reads:
+- `/Users/fabriciorodriguez/.codex/plugins/cache/egm/egm/0.1.0/agents/codebase_details.md`
+- `/Users/fabriciorodriguez/.codex/plugins/cache/egm/egm/0.1.0/resources/document_standards/feature-spec-standard.md`
+- `/Users/fabriciorodriguez/Desktop/SWE project/app/docs/superpowers/specs/2026-10-26-bmp-inspection-demo-design.md`
+- `/Users/fabriciorodriguez/Desktop/SWE project/RECON.md`
+- `/Users/fabriciorodriguez/Desktop/SWE project/ASTRA-DEMO-PLAN.md`
+
+Also fully read `/Users/fabriciorodriguez/Desktop/SWE project/app/README.md`. Read-only repository inspection confirms only README and target specification are tracked; no application, dependencies, schema, tests, or telemetry implementation exists. No services contacted or files changed.
+
+1. **Major — Observability & Operational SRE Debuggability.** Specification lines 28, 53–63 define ambiguous saves and retries but no correlation contract. A timeout cannot be traced to validation, GIS resolution, transaction failure, or committed response loss. Proposed requirement: structured server events containing request ID, draft UUID, operation stage, result code, elapsed milliseconds, and safe asset reference; return request ID with errors. Record committed/replayed/conflict outcomes separately. Never log passwords, tokens, notes, or raw service payloads. Lightweight local structured logs suffice for the one-day demo; a distributed tracing platform is unnecessary.
+
+2. **Major — Observability & Operational SRE Debuggability.** Lines 39–45 and 63 distinguish access concerns conceptually, but lack a repeatable diagnostic record. A failed map may arise from SDK/runtime setup, basemap access, GIS authorization, schema mismatch, or source query failure. Proposed requirement: gate evidence records build revision, dataset mode/version, verified object-ID field, normalized error category, last successful query time, and counts actually retrieved. Document where browser and server diagnostics appear. Keep live GIS identity separate from Supabase authentication in diagnostics.
+
+3. **Major — Implementation integrity.** Lines 53–57 leave retry ordering unresolved: if retry re-resolves live GIS before checking an existing inspection, source failure or changed attributes can prevent confirmation of an already committed save. Proposed remedy: authenticate, validate/canonicalize immutable submitted inputs, check owned draft UUID, and compare original submitted content/reference before any fresh GIS lookup; only new drafts require source resolution. Compare input fields rather than mutable re-fetched snapshot attributes. Acceptance should cover successful commit with lost response followed by GIS unavailability.
+
+4. **Major — Acceptance observability.** Lines 75–81 specify good behaviors but not a durable evidence format. Proposed requirement: one compact acceptance record with build revision, environment label, dataset namespace, baseline counts, A/B source references, draft/inspection IDs, expected/actual deltas, and pass/fail for refresh, replay, conflict, and authorization checks. Redact credentials and sensitive attributes. This directly connects demonstrated behavior to the delivered build without adding an analytics project.
+
+5. **Nit — Repository accuracy and alternatives.** Line 11 now understates repository state: the specification itself is tracked, and current HEAD is `ac07e95` (`docs: specify Sprint 2 BMP inspection demo`). Say “At initial inspection, the repository contained only a README; no application implementation exists.” The target also lacks its own explicit alternatives evaluation required by the standard; the parent Astra plan contains several rationales, but the specification should summarize chosen 2D/local/Supabase boundaries and rejected options or explicitly incorporate that document.
+
+Review complete. Proposed next action: add the minimal diagnostics contract and retry-order rule to the specification; approximately two minutes.

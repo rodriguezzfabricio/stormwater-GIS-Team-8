@@ -1,0 +1,22 @@
+Review complete; remedies below are proposals, not approved changes.
+
+Read attestation: fully read these exact files, including rereading truncated portions:
+`/Users/fabriciorodriguez/.codex/plugins/cache/egm/egm/0.1.0/agents/design_critic.md`;
+`/Users/fabriciorodriguez/.codex/plugins/cache/egm/egm/0.1.0/resources/document_standards/feature-spec-standard.md`;
+`/Users/fabriciorodriguez/Desktop/SWE project/app/docs/superpowers/specs/2026-10-26-bmp-inspection-demo-design.md`;
+`/Users/fabriciorodriguez/Desktop/SWE project/RECON.md`;
+`/Users/fabriciorodriguez/Desktop/SWE project/ASTRA-DEMO-PLAN.md`;
+`/Users/fabriciorodriguez/Desktop/SWE project/app/README.md`.
+No modifications, service calls, or history/memory retrieval performed. References below are to the target specification.
+
+1. **Major — Database integrity boundary, lines 51–59.** The handler validates lengths and resolves authoritative GIS snapshots, but own-row INSERT policies alone do not prevent a signed-in caller from directly inserting malformed data, arbitrary snapshots, or supplied timestamps through the database API. “No update/delete operation” should also cover direct database access. **Proposed remedy:** explicitly select the sole permitted write path; enforce field constraints in PostgreSQL, deny direct UPDATE/DELETE, and ensure callers cannot supply authoritative snapshot/timestamp values through an exposed RPC. Add direct database API tests for forged snapshots, identity/timestamp overrides, oversized fields, and mutation attempts. An elevated RPC that accepts unverified snapshots merely moves the bypass.
+
+2. **Major — GIS authorization bottleneck, lines 17, 45, 53, 67.** Browser polygon access and server-side source verification are different requirements. A browser OAuth flow may load the layer while the write handler still cannot verify it; the current gate could pass too early. **Proposed remedy:** require the 90-minute gate to prove one selected feature can be resolved through the actual server write path with approved credentials. Fix the server's allowed source item/layer/dataset; never fetch an arbitrary client-supplied service URL. If that cannot work, explicitly choose an authorized server-side snapshot before building the persistence integration.
+
+3. **Major — Retry dependency and snapshot semantics, lines 27–29, 53–57, 63.** Re-resolving GIS before checking an existing draft can turn a successfully committed inspection into a retry failure when GIS becomes unavailable. Also, attributes may change between display and save, so “displayed snapshot” and “fresh authoritative snapshot” can differ. **Proposed remedy:** authenticate and inspect an existing owned draft UUID first, compare normalized user input plus canonical source identity, and return its stored result without another GIS call. Resolve GIS only for a new write. Define whether changed displayed attributes require reconfirmation or are clearly labeled as submission-time values. Test a lost database response followed by GIS outage.
+
+4. **Major — Alternatives requirement, lines 13–21 and 65–71.** The target names a stack and fallback but does not explicitly evaluate the consequential write-path alternatives required by the standard. The planning document explains 2D versus 3D, but not how server-verified GIS attributes reach an enforceable database boundary. **Proposed remedy:** add a compact decision comparing direct browser writes, user-context transactional RPC, and trusted server writes; document the selected route's integrity guarantees and rejected alternatives. Include live lookup versus approved fixed snapshot and their access/setup tradeoffs.
+
+5. **Nit — Cost, quota, and resource bounds, lines 29, 39, 53, 59.** At the observed 121 features, large-scale architecture is unnecessary, but unbounded history and repeated GIS lookups introduce avoidable database/network work. No measured payload size or service quota is available, so numerical cost claims would be speculative. **Proposed remedy:** use a bounded history page with the existing timestamp/ID ordering, an index beginning with inspector and asset IDs, explicit GIS timeouts, and no background polling. Record observed geometry payload and actual free-tier access during the gate. No LLM runtime is proposed; token budgets do not belong in the application architecture.
+
+Next action, under two minutes: mark the write boundary and server-side GIS proof as explicit decisions required before implementation.
