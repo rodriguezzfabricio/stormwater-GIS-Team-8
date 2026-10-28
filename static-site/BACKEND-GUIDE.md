@@ -66,7 +66,7 @@ A non-`@umbc.edu` account is signed out at once and sent to `login.html` with "O
 
 ## 3. How to test
 
-The database change must be applied first (see `supabase/README.md`, "Applying the pending migration"). Until then, every save says "This feature is not from the BMP layer the database accepts."
+The database change is applied (2026-10-28), so saves work.
 
 ### Quick check (2 minutes)
 
@@ -139,7 +139,7 @@ Not checked by hand: the case where a reply is lost after the save reached the d
 | Google says "Access blocked" | Your Google account is not a test user | Ask Fabricio to add it. Use your `@umbc.edu` account |
 | "Only @umbc.edu accounts can sign up." or "…can use this app." | You picked a non-UMBC account | Sign in again with your `@umbc.edu` account |
 | The map shows no BMPs | Your ArcGIS account is not in the "Stormwater ArcGIS Map" group | Ask the group owner to add you |
-| "This feature is not from the BMP layer the database accepts." on every save | The database change is not applied yet | Ask Fabricio (`supabase/README.md`, "Applying the pending migration") |
+| "This feature is not from the BMP layer the database accepts." on every save | The database accepts a different layer than the map shows | Ask Fabricio (`supabase/README.md`, migrations) |
 | `This feature is from "..." (item ..., layer ...)` | The selected feature is from another layer | Send Fabricio the whole message text. Do not change the code |
 | "Sign-in could not load." | The supabase-js CDN or `supabase-config.js` did not load | Check your connection and reload |
 | "No reply from the server, so the save is not confirmed." | Network problem. It may or may not be saved | Press Save again. It never duplicates |

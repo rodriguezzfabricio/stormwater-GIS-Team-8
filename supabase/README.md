@@ -2,16 +2,16 @@
 
 For whoever maintains the inspection database and sign-in. The frontend teammate reads [`CONTRACT.md`](./CONTRACT.md) instead. The full design is in [`docs/designs/inspection-database-and-umbc-sign-in.md`](../docs/designs/inspection-database-and-umbc-sign-in.md).
 
-Contract-Version: 2 in `CONTRACT.md`. `database.types.ts` still says 1 until the pending migration below is applied and the types are regenerated.
+Contract-Version: 2 (same number in `CONTRACT.md` and `database.types.ts`)
 Last verified: 2026-10-27
 
-> **Pending (2026-10-28):** `migrations/20261028120000_bmp_source_import_layer.sql` is **written, not applied**. It points both functions at the layer the map shows (item `5d70e438bb6045d6b3af05aee061e3cd`, layer 0). Until it is applied, saves from `static-site/` fail with `unknown_source`. See "Applying the pending migration" below.
+> **Applied 2026-10-28:** `migrations/20261028070220_bmp_source_import_layer.sql` points both functions at the layer the map shows (item `5d70e438bb6045d6b3af05aee061e3cd`, layer 0). Rule tests passed; advisors showed only the three known warnings (see below).
 
 ## Folder layout
 
 | Path | What it is |
 |---|---|
-| `migrations/` | The three applied migrations, named with the versions Supabase recorded, plus one written but not yet applied (`20261028120000_bmp_source_import_layer.sql`, a temporary name). The source of truth for the schema. Never edit one after it is applied. |
+| `migrations/` | The four applied migrations, named with the versions Supabase recorded. The source of truth for the schema. Never edit one after it is applied. |
 | `tests/inspection_rules.sql` | Rule tests. One transaction that ends in `ROLLBACK`, so nothing is left behind. |
 | `rollback/inspection_down.sql` | Manual rollback. Deletes every saved inspection. Never applied as a migration. |
 | `scripts/configure-auth.sh` | Changes Auth settings (Google, redirect URLs, sign-up hook) through the Supabase Management API. |
@@ -48,25 +48,11 @@ These are the versions Supabase recorded. The local file names match them, so a 
 | `20261028024553` | `20261028024553_inspection_functions.sql` | `public.create_inspection(...)` (the only write path) and `public.my_inspections(...)`. Execute rights for `authenticated` only. |
 | `20261028024605` | `20261028024605_umbc_signup_hook.sql` | `public.hook_restrict_umbc_signup(event jsonb)`, callable only by `supabase_auth_admin`. Switched on 2026-10-27 (see "Auth settings applied"). |
 
-Latest applied migration: `20261028024605_umbc_signup_hook`.
+| `20261028070220` | `20261028070220_bmp_source_import_layer.sql` | `create_inspection` accepts only item `5d70e438bb6045d6b3af05aee061e3cd` (`UMBC_BMP_ArcGIS_Import`), layer 0. `my_inspections` becomes plpgsql and raises `unknown_source` for any other source. Rows saved against the old layer (item `cc6a7a27…`, layer 3) are kept unchanged and are no longer returned. Contract-Version 2. Applied 2026-10-28 by rodriguezzfabricio. |
 
-### Written, not applied
+Latest applied migration: `20261028070220_bmp_source_import_layer`.
 
-| File (temporary name) | What it changes |
-|---|---|
-| `20261028120000_bmp_source_import_layer.sql` | `create_inspection` accepts only item `5d70e438bb6045d6b3af05aee061e3cd` (`UMBC_BMP_ArcGIS_Import`), layer 0. `my_inspections` becomes plpgsql and raises `unknown_source` for any other source. Rows saved against the old layer (item `cc6a7a27…`, layer 3) are kept unchanged and are no longer returned. Contract-Version 2. |
-
-### Applying the pending migration
-
-rodriguezzfabricio does these in a Claude session with the Supabase MCP, before the `feature/wire-backend` PR merges:
-
-1. Apply the exact text of `20261028120000_bmp_source_import_layer.sql` (MCP `apply_migration`).
-2. List the migrations and rename the file to the version Supabase recorded. Update the tables above.
-3. Run `tests/inspection_rules.sql`. Expect `ALL TESTS PASSED`.
-4. Run both advisors (security and performance).
-5. Regenerate `database.types.ts` with the header `Contract-Version: 2`.
-6. Mark the migration "applied" in this file and move it into the "Applied migrations" table.
-7. Check the browser flow by hand with `static-site/BACKEND-GUIDE.md`, "How to test".
+Advisors after it (2026-10-28), all known and accepted: `create_inspection` is a SECURITY DEFINER function callable by `authenticated` (by design: it is the only write path and checks everything itself); leaked-password protection is off (email fallback only); `inspections.asset_id` has no index of its own (the history index starts with `inspector_id`; fine at demo scale).
 
 Between step 1 and the merge, `stormwater/auth-test.html` on `main` can't save: it still sends the old layer.
 
@@ -88,7 +74,7 @@ If the hook is ever turned off, any Google account can create a user and appear 
 
 - `anon` (signed out) has no access to either table and cannot run either function.
 - `authenticated` can `SELECT` the tables and run the two functions. Row rules limit `inspections` to the caller's own rows and require a confirmed, non-anonymous `@umbc.edu` account (`private.is_umbc_user()`).
-- No role can `INSERT`, `UPDATE`, `DELETE` or `TRUNCATE` the tables directly. Saves go through `create_inspection`, which runs with the owner's rights, checks everything itself and accepts only one BMP layer: item `cc6a7a27c267435c8f7ed95a59eb5f24`, layer 3 today; item `5d70e438bb6045d6b3af05aee061e3cd`, layer 0 once the pending migration is applied.
+- No role can `INSERT`, `UPDATE`, `DELETE` or `TRUNCATE` the tables directly. Saves go through `create_inspection`, which runs with the owner's rights, checks everything itself and accepts only item `5d70e438bb6045d6b3af05aee061e3cd`, layer 0.
 - A repeated draft ID with identical content returns the original record. Different content, or another user's draft ID, raises `draft_conflict`.
 - Deleting a user who has inspections fails (foreign key). To clean up demo accounts, delete their inspections first as the database owner, using SQL. The API cannot delete them.
 
@@ -220,7 +206,7 @@ Run after the last migration. These are the accepted or known items.
 ## Known gaps and open questions
 
 - **Snapshot not verified:** `displayed_snapshot` is stored as the browser sent it and is not checked against ArcGIS (spec line 53). Fixing it needs server code that can read the GIS layer. A server handler could later call the same `create_inspection`.
-- **Answered 2026-10-28:** WebMap `d59cb5cc77914e6c96631b856c667129` does not show item `cc6a7a27…`. Its BMP layer is `UMBC_BMP_ArcGIS_Import` (item `5d70e438bb6045d6b3af05aee061e3cd`, layer 0), shared only with the "Stormwater ArcGIS Map" group. The pending migration switches to it. Evidence: `docs/research/2026-10-27-wire-backend-into-static-site.md`, "Addendum 2026-10-28".
+- **Answered 2026-10-28:** WebMap `d59cb5cc77914e6c96631b856c667129` does not show item `cc6a7a27…`. Its BMP layer is `UMBC_BMP_ArcGIS_Import` (item `5d70e438bb6045d6b3af05aee061e3cd`, layer 0), shared only with the "Stormwater ArcGIS Map" group. Migration `20261028070220_bmp_source_import_layer` switched to it. Evidence: `docs/research/2026-10-27-wire-backend-into-static-site.md`, "Addendum 2026-10-28".
 - **Open question:** whether object IDs survive a re-import of `UMBC_BMP_ArcGIS_Import`. Records point at object IDs, so a re-import could attach old records to the wrong BMP. Check before any re-import.
 - **Answered 2026-10-28:** the `static-site/` dashboard uses Supabase through the drop-in (spec `docs/spec/v1.md`).
 - **Open question:** accounts outside `@umbc.edu` (for example a county reviewer) are locked out by design.

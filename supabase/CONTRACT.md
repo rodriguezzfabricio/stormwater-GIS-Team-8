@@ -2,7 +2,7 @@
 
 Contract-Version: 2
 Date: 2026-10-28
-Latest migration: `20261028120000_bmp_source_import_layer` (written, not yet applied; the file is renamed to the version Supabase records when it is applied)
+Latest migration: `20261028070220_bmp_source_import_layer`
 Types: [`database.types.ts`](./database.types.ts) (carries the same `Contract-Version`; if the two differ, ask for a fresh copy)
 
 > **Building in `static-site/`? You don't need this file.** The dashboard is already wired to the back end through the drop-in module `static-site/inspection-backend.mjs`; [`static-site/BACKEND-GUIDE.md`](../static-site/BACKEND-GUIDE.md) explains how it works and how to test it. This contract is the low-level reference behind it.
