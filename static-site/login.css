@@ -25,3 +25,26 @@ button:disabled { opacity: .65; cursor: wait; }
 @media (max-width: 520px) { .login-content { padding: 24px; } .login-header { padding: 20px 24px; } }
 
 .password-label { margin-top: 22px; }
+
+.demo-note { font-size: 12px; font-weight: 400; color: #66758a; }
+
+/* BEGIN UMBC LOGIN FIELD SPACING */
+/* Keep both form fields aligned and separate each label from the previous input. */
+#login-form label[for="email"],
+#login-form label[for="password"] {
+    display: block;
+    margin-bottom: 8px;
+    line-height: 1.35;
+}
+
+#login-form label[for="password"] {
+    margin-top: 24px;
+}
+
+#login-form input#email,
+#login-form input#password {
+    display: block;
+    width: 100%;
+    margin-top: 0;
+}
+/* END UMBC LOGIN FIELD SPACING */
