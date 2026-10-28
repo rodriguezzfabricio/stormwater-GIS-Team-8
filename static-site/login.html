@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UMBC Stormwater GIS - Login</title>
+
+    <link rel="stylesheet" href="login.css">
+</head>
+
+<body>
+    <main class="login-page">
+
+        <section class="login-card">
+
+            <div class="login-header">
+                <div class="logo-box">
+                    <span>💧</span>
+                </div>
+
+                <div>
+                    <h1>UMBC</h1>
+                    <p>STORMWATER GIS</p>
+                </div>
+            </div>
+
+            <div class="login-content">
+                <h2>Sign in</h2>
+                <p class="subtitle">
+                    Sign in with your UMBC account to access the Stormwater GIS.
+                </p>
+
+                <form id="login-form">
+
+                    <label for="email">UMBC Email</label>
+                    <input
+                        type="email"
+                        id="email"
+                        placeholder="username@umbc.edu"
+                        required
+                    >
+
+                    <label for="password">Password</label>
+                    <input
+                        type="password"
+                        id="password"
+                        placeholder="Enter your password"
+                        required
+                    >
+
+                    <p id="login-error"></p>
+
+                    <button type="submit">
+                        Sign In
+                    </button>
+
+                </form>
+            </div>
+
+        </section>
+
+    </main>
+
+    <script src="login.js"></script>
+</body>
+</html>

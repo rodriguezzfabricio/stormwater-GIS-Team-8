@@ -1,0 +1,141 @@
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: Arial, Helvetica, sans-serif;
+    background: #f4f7fb;
+    color: #132238;
+}
+
+.login-page {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+}
+
+.login-card {
+    width: 100%;
+    max-width: 440px;
+    background: white;
+    border: 1px solid #dfe6ee;
+    border-radius: 14px;
+    box-shadow: 0 12px 35px rgba(15, 35, 60, 0.1);
+    overflow: hidden;
+}
+
+.login-header {
+    background: #10243d;
+    color: white;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 24px 28px;
+}
+
+.logo-box {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    background: #ffc72c;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+}
+
+.login-header h1 {
+    font-size: 22px;
+    letter-spacing: 1px;
+}
+
+.login-header p {
+    margin-top: 3px;
+    font-size: 11px;
+    letter-spacing: 1.5px;
+    color: #d4deea;
+}
+
+.login-content {
+    padding: 32px;
+}
+
+.login-content h2 {
+    font-size: 28px;
+    margin-bottom: 8px;
+}
+
+.subtitle {
+    color: #66758a;
+    font-size: 14px;
+    line-height: 1.5;
+    margin-bottom: 28px;
+}
+
+form {
+    display: flex;
+    flex-direction: column;
+}
+
+label {
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 7px;
+}
+
+input {
+    width: 100%;
+    padding: 13px 14px;
+    border: 1px solid #ccd6e2;
+    border-radius: 8px;
+    font-size: 15px;
+    margin-bottom: 20px;
+    outline: none;
+    transition: border 0.2s, box-shadow 0.2s;
+}
+
+input:focus {
+    border-color: #305e8c;
+    box-shadow: 0 0 0 3px rgba(48, 94, 140, 0.12);
+}
+
+#login-error {
+    min-height: 20px;
+    color: #b42318;
+    font-size: 13px;
+    margin-bottom: 10px;
+}
+
+button {
+    border: none;
+    background: #ffc72c;
+    color: #132238;
+    padding: 14px;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+}
+
+button:hover {
+    background: #f0b900;
+}
+
+button:active {
+    transform: translateY(1px);
+}
+
+@media (max-width: 520px) {
+    .login-content {
+        padding: 24px;
+    }
+
+    .login-header {
+        padding: 20px 24px;
+    }
+}
