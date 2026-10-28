@@ -53,12 +53,28 @@ https://doc.arcgis.com/en/arcgis-online/manage-data/add-app-url.htm
 - `styles.css`: original responsive design plus map states
 - `arcgis-config.js`: client ID, ArcGIS portal, existing WebMap item ID
 - `map.js`: SDK OAuth registration, sign-in, map loading and error handling
+- `auth-test.html`: standalone Supabase test page, no ArcGIS
+- `auth-test.js`: its logic; also a working example of every backend call
+- `supabase-config.js`: public Supabase URL and publishable key only
 - `start-local.sh` / `start-local.bat`: optional local launchers
+
+## Supabase test page
+
+`auth-test.html` tests the Supabase back end with no ArcGIS code on the page.
+
+1. From this folder, run `./start-local.sh`.
+2. Open http://localhost:5500/auth-test.html.
+3. Sign in with a UMBC Google account (`@umbc.edu`).
+
+It is kept separate from `index.html` on purpose. ArcGIS and Supabase sign-in both
+return to port 5500 with `?code=` in the URL, so the two flows would clash on one page.
 
 ## Not yet part of this static proof-of-concept
 
-The facility details panel and inspection form are still mock UI; selecting a
-real map feature does not yet update the panel, and records are not stored.
+The facility details panel and inspection form on `index.html` are still mock UI;
+selecting a real map feature does not yet update the panel. Saving works on the
+Supabase test page only (`auth-test.html`), not on `index.html`. The frontend
+contract is in `../supabase/CONTRACT.md`.
 
 ## Verification scope
 
