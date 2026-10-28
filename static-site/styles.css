@@ -375,3 +375,20 @@ html.map-fullscreen-active, html.map-fullscreen-active body { overflow:hidden; }
 .history-detail dt { font-weight:700; color:#58697d; }
 .history-detail dd { margin:0 0 6px; overflow-wrap:anywhere; }
 @media (max-width:610px) { .account-email { max-width:150px; } .history-shell { padding:15px; } .save-status { width:100%; } }
+/* Hide the left navigation sidebar */
+aside.sidebar {
+    display: none !important;
+}
+
+/* Remove the sidebar's reserved space */
+*:has(> aside.sidebar) {
+    grid-template-columns: minmax(0, 1fr) !important;
+}
+
+/* Expand the main content into the freed space */
+*:has(> aside.sidebar) > :not(aside.sidebar) {
+    grid-column: 1 / -1 !important;
+    margin-left: 0 !important;
+    width: 100% !important;
+    min-width: 0;
+}

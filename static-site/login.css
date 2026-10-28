@@ -25,3 +25,7 @@ button:disabled { opacity: .65; cursor: wait; }
 .btn-secondary:hover { background: #f4f7fb; }
 .login-help { color: #66758a; font-size: 13px; line-height: 1.55; margin-top: 16px; }
 @media (max-width: 520px) { .login-content { padding: 24px; } .login-header { padding: 20px 24px; } }
+/* Remove blue UMBC banner from sign-in page */
+.login-header {
+    display: none !important;
+}
