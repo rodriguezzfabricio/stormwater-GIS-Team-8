@@ -66,7 +66,7 @@
           <button class="btn btn-muted" type="button" id="new-inspection">New inspection</button>
         </div>
         <p id="result" class="check-line" style="margin-top:12px" aria-live="polite"></p>
-        <p class="check-line">After a save this page keeps the same draft, so you can press Save again and see "Already saved". Your real page should start a new draft after each save (see BACKEND-GUIDE.md, Step 4).</p>
+        <p class="check-line">After a save this page keeps the same draft, so you can press Save again and see "Already saved". The dashboard starts a new draft after each confirmed save (BACKEND-GUIDE.md, "Saving").</p>
       </div>
     </section>
 
@@ -84,7 +84,7 @@
     <section class="section-block" aria-labelledby="real-title">
       <div class="section-heading"><div><h2 id="real-title">4. Check the real map layer</h2></div></div>
       <div class="form-shell check-box">
-        <p>The BMP above is built by hand, so it always passes this check. To test the real map, call <code>checkFeature(graphic).message</code> on the BMP you clicked and show the message. If it says the item or layer is wrong, send Fabricio the message text. See BACKEND-GUIDE.md, Step 3.</p>
+        <p>The BMP above is built by hand, so it always passes this check. To test the real map, use the dashboard at <code>/</code>: the selection message says when a clicked feature is not from the accepted layer. If it does, send Fabricio the message text. See BACKEND-GUIDE.md, "How to test".</p>
       </div>
     </section>
   </main>

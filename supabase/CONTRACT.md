@@ -1,11 +1,17 @@
 # Back-end contract for the BMP inspection frontend
 
-Contract-Version: 1
-Date: 2026-10-27
-Latest migration: `20261028024605_umbc_signup_hook`
+Contract-Version: 2
+Date: 2026-10-28
+Latest migration: `20261028120000_bmp_source_import_layer` (written, not yet applied; the file is renamed to the version Supabase records when it is applied)
 Types: [`database.types.ts`](./database.types.ts) (carries the same `Contract-Version`; if the two differ, ask for a fresh copy)
 
-> **Building in `static-site/`? You don't need this file.** Use the drop-in module `static-site/inspection-backend.mjs` and follow [`static-site/BACKEND-GUIDE.md`](../static-site/BACKEND-GUIDE.md). It already handles everything below. This contract is the low-level reference behind it.
+> **Building in `static-site/`? You don't need this file.** The dashboard is already wired to the back end through the drop-in module `static-site/inspection-backend.mjs`; [`static-site/BACKEND-GUIDE.md`](../static-site/BACKEND-GUIDE.md) explains how it works and how to test it. This contract is the low-level reference behind it.
+
+> **What changed in version 2 (2026-10-28):**
+>
+> - The accepted BMP layer is now `UMBC_BMP_ArcGIS_Import`: item `5d70e438bb6045d6b3af05aee061e3cd`, layer `0`, the layer the dashboard's WebMap actually shows. Item `cc6a7a27c267435c8f7ed95a59eb5f24` layer `3` is no longer accepted (sections 2 and 3).
+> - `my_inspections` now returns `unknown_source` for any other item or layer, like `create_inspection` (sections 5 and 7). Inspections saved against the old layer are kept in the database but no call returns them.
+> - The drop-in saves `displayed_snapshot` as `{ "arcgis": …, "form": … }` (section 9).
 
 This file is the whole agreement between the back end and your app. You do not need to read any SQL.
 
@@ -22,8 +28,9 @@ A working example of every call is in [`stormwater/auth-test.js`](../stormwater/
 > - **Sign-in (spec line 25):** Google sign-in for `@umbc.edu` accounts, not only pre-made email + password accounts. Email + password stays on as a fallback for teammates.
 > - **No server handlers (spec line 17):** the browser calls database functions directly. All checks run inside the database.
 > - **Snapshot is not verified (spec line 53):** `displayed_snapshot` is stored exactly as your app sends it. The back end does not check it against ArcGIS.
-> - **Feature rows (spec line 55):** a feature gets a database row the first time it is inspected. Only item `cc6a7a27c267435c8f7ed95a59eb5f24`, layer 3 is accepted.
-> - **Outcome is `pass` or `fail` only.** This matches the spec. It differs from the static `index.html`, which also offers "Needs verification".
+> - **Feature rows (spec line 55):** a feature gets a database row the first time it is inspected. Only item `5d70e438bb6045d6b3af05aee061e3cd`, layer 0 is accepted.
+> - **Outcome is `pass` or `fail` only.** This matches the spec. The dashboard's form offers only Pass and Fail.
+> - **Snapshot contents (spec line 43):** the drop-in saves every attribute of the feature plus five editable form fields, not only the displayed subset (section 9).
 
 ---
 
@@ -112,14 +119,14 @@ The sign-up block (a Supabase Auth hook that stops non-UMBC accounts from being 
 
 | Name | Type | Example | Meaning |
 |---|---|---|---|
-| `source_item` | string | `"cc6a7a27c267435c8f7ed95a59eb5f24"` | ArcGIS item ID of the BMP feature service. 32 lowercase hex characters, not a URL. Must match exactly. |
-| `layer_id` | number | `3` | Layer number of `BMP_Database` inside that item. Always `3`. |
-| `object_id` | string | `"42"` | The feature's ArcGIS object ID, as digits in a string. No leading zero, 1 to 19 digits. On this layer the field is `OBJECTID_1`. |
+| `source_item` | string | `"5d70e438bb6045d6b3af05aee061e3cd"` | ArcGIS item ID of the BMP feature service (`UMBC_BMP_ArcGIS_Import`). 32 lowercase hex characters, not a URL. Must match exactly. |
+| `layer_id` | number | `0` | Layer number of `UMBC_BMP_ArcGIS_Import` inside that item. Always `0`. |
+| `object_id` | string | `"42"` | The feature's ArcGIS object ID, as digits in a string. No leading zero, 1 to 19 digits. The field name is the layer's `objectIdField`; read it at runtime, it has not been written down for this layer. |
 | `draft_id` | string (UUID) | `"0b6f0a3e-6a5e-4c1e-9f55-0c1b8d2f7a11"` | You make it with `crypto.randomUUID()`. It becomes the inspection's record ID and is the retry key. See section 6. |
 | `inspection_type` | string | `"Routine"` | The dropdown label as text. 1 to 120 characters. |
 | `outcome` | string | `"pass"` | `"pass"` or `"fail"`. Send lowercase. |
 | `notes` | string or empty | `"Outlet clear, no standing water."` | Optional, up to 4,000 characters. Blank is stored as null. |
-| `displayed_snapshot` | JSON object | `{ "Facility_T": "…" }` | The feature details your screen showed when the user saved. See section 9. |
+| `displayed_snapshot` | JSON object | `{ "arcgis": { … }, "form": { … } }` | The feature's attributes and the form fields when the user saved. See section 9. |
 | `id` (in results) | string (UUID) | same as `draft_id` | The saved record's ID. |
 | `asset_id` (in results) | string (UUID) | `"5d1c7e52-…"` | The database's own ID for the feature. You never send it. |
 | `submitted_at` | string (ISO 8601) | `"2026-10-28T02:51:07.482913+00:00"` | Server time of the save. Never sent by you. |
@@ -136,17 +143,18 @@ Three of the arguments come from the selected map feature.
 ```ts
 // `layer` is the BMP FeatureLayer. `graphic` is the selected feature (hit test or click).
 const feature = {
-  p_source_item: layer.portalItem!.id,                          // "cc6a7a27c267435c8f7ed95a59eb5f24"
-  p_layer_id: layer.layerId,                                    // 3  (not layer.id, which is an SDK-internal string)
+  p_source_item: layer.portalItem!.id,                          // "5d70e438bb6045d6b3af05aee061e3cd"
+  p_layer_id: layer.layerId,                                    // 0  (not layer.id, which is an SDK-internal string)
   p_object_id: String(graphic.attributes[layer.objectIdField]), // "42"
 }
 ```
 
 - Make sure the object ID field is in the query's `outFields`. If it is missing, `String(undefined)` gives `"undefined"` and the save fails with `invalid_input:object_id`.
-- Check these three values once in development before wiring the Save button. Expected: item `cc6a7a27c267435c8f7ed95a59eb5f24`, layer `3`, object ID field `OBJECTID_1`.
-- **Open question:** nobody has confirmed that the WebMap in `stormwater/arcgis-config.js` (`d59cb5cc77914e6c96631b856c667129`) contains item `cc6a7a27c267435c8f7ed95a59eb5f24`. If it does not (for example `layer.portalItem` is null, or has another ID), every save fails with `unknown_source`. Tell rodriguezzfabricio.
+- Check these three values once in development before wiring the Save button. Expected: item `5d70e438bb6045d6b3af05aee061e3cd`, layer `0`, and an object ID from the layer's `objectIdField`.
+- The WebMap in `stormwater/arcgis-config.js` (`d59cb5cc77914e6c96631b856c667129`) shows this layer (checked in the browser on 2026-10-28; see `docs/research/2026-10-27-wire-backend-into-static-site.md`, "Addendum 2026-10-28"). If `layer.portalItem` is null or has another ID in your app, every save fails with `unknown_source`. Tell rodriguezzfabricio.
+- **Open question:** whether object IDs survive a re-import of `UMBC_BMP_ArcGIS_Import`. Records point at object IDs, so check before any re-import.
 
-`MDE_SF_Num` and `UMBC_PRF` repeat across features. Never use them to identify a feature.
+Attributes such as `ms4_bmp_id` can repeat across features. Never use an attribute to identify a feature; use item + layer + object ID.
 
 ---
 
@@ -159,7 +167,7 @@ The only way to save. It is one call, and the database confirms it or returns an
 | Argument | Required | Rule |
 |---|---|---|
 | `p_draft_id` | yes | UUID. |
-| `p_source_item` | yes | Exactly `cc6a7a27c267435c8f7ed95a59eb5f24`. Not trimmed or lowercased by the server. |
+| `p_source_item` | yes | Exactly `5d70e438bb6045d6b3af05aee061e3cd`. Not trimmed or lowercased by the server. |
 | `p_layer_id` | yes | Exactly `3`, sent as a number. |
 | `p_object_id` | yes | Digits only, no leading zero, 1 to 19 digits. |
 | `p_inspection_type` | yes | 1 to 120 characters after trimming. |
@@ -283,8 +291,8 @@ Returns only the caller's own inspections for the one feature, newest first (`su
 
 | Argument | Required | Rule |
 |---|---|---|
-| `p_source_item` | yes | Same value as above. |
-| `p_layer_id` | yes | Same value as above. |
+| `p_source_item` | yes | Same value as above. Any other value returns `unknown_source`. |
+| `p_layer_id` | yes | Same value as above. Any other value returns `unknown_source`. |
 | `p_object_id` | yes | The feature's object ID as a string. |
 | `p_limit` | no | Default 50. Clamped to 1 to 50. |
 
@@ -320,7 +328,7 @@ For the "Last inspection" line in the facility panel, call it with `p_limit: 1`.
     "inspection_type": "Follow-up",
     "outcome": "fail",
     "notes": null,
-    "displayed_snapshot": { "Facility_T": "…", "Facility_N": "…", "MDE_SF_Num": null, "UMBC_PRF": "…" }
+    "displayed_snapshot": { "arcgis": { "bmp_name": "…", "bmp_type": "…" }, "form": { "condition_status": "…" } }
   },
   {
     "id": "0b6f0a3e-6a5e-4c1e-9f55-0c1b8d2f7a11",
@@ -329,7 +337,7 @@ For the "Last inspection" line in the facility panel, call it with `p_limit: 1`.
     "inspection_type": "Routine",
     "outcome": "pass",
     "notes": "Outlet clear, no standing water.",
-    "displayed_snapshot": { "Facility_T": "…", "Facility_N": "…", "MDE_SF_Num": null, "UMBC_PRF": "…" }
+    "displayed_snapshot": { "arcgis": { "bmp_name": "…", "bmp_type": "…" }, "form": { "condition_status": "…" } }
   }
 ]
 ```
@@ -337,6 +345,7 @@ For the "Last inspection" line in the facility panel, call it with `p_limit: 1`.
 - A feature that has never been inspected, or one inspected only by other people, returns `[]`. That is not an error.
 - A non-UMBC account also gets `[]`.
 - A signed-out caller gets the "signed out" error in the table below.
+- Any item or layer other than the accepted one gets `unknown_source`. Inspections saved against the old layer (item `cc6a7a27…`, layer 3) stay in the database but are never returned.
 - Rows from other users never appear.
 
 ---
@@ -416,11 +425,11 @@ supabase-js does not throw for API errors. It returns `{ data, error, status }`.
 | Session expired | `PGRST301` or `PGRST303` | 401 | `JWT expired` | Sign in again. Keep the draft. Retry with the same draft ID. supabase-js usually refreshes the session first, so this is rare. |
 | Not a confirmed UMBC account | `42501` | 403 | `forbidden_domain` | Show "UMBC accounts only". |
 | Bad field value | `P0001` | 400 | `invalid_input:<field>` | Highlight that field. Keep all inputs. `draft_id` and `displayed_snapshot` have no input; treat those two as an app bug and show a general error. |
-| Wrong item or layer | `P0001` | 400 | `unknown_source` | Ask the user to re-select the feature. If it happens for every feature, see the open question in section 3. |
+| Wrong item or layer (`create_inspection` and `my_inspections`) | `P0001` | 400 | `unknown_source` | Ask the user to re-select the feature. If it happens for every feature, check the three values in section 3. |
 | Draft ID reused with different content, or someone else's draft ID | `23505` | 409 | `draft_conflict` | Start a new inspection with a new draft ID. |
 | Network failure or server error | none or empty | 0, or 5xx | none | Say "not confirmed" (it may have been saved). Offer Retry with the **same** draft ID. |
 
-`my_inspections` can return only the signed-out and expired-session rows above. It does not return `forbidden_domain`.
+`my_inspections` can return only the signed-out, expired-session and `unknown_source` rows above. It does not return `forbidden_domain`.
 
 Other errors you may meet while building, which our tests do not exercise: `22P02` (HTTP 400) for a malformed UUID or a non-integer `p_layer_id`, and `PGRST202` (HTTP 404) when an argument name is misspelled or missing. These mean a bug in the call, not a user problem.
 
@@ -458,7 +467,7 @@ For `network` and `unknown`, say "not confirmed", not "not saved". The request m
 
 ## 8. HTML form to function arguments
 
-Source: the inspection form in `stormwater/index.html`. The back end follows the spec, so some static fields change or go away.
+Source: the inspection form in the original prototype, `stormwater/index.html`. The field names in the table (`Facility_T`, `MDE_SF_Num` and so on) belong to the old layer. The `static-site/` dashboard is already wired; see `static-site/BACKEND-GUIDE.md`.
 
 | `index.html` field | What to do | Sent as |
 |---|---|---|
@@ -474,30 +483,36 @@ Source: the inspection form in `stormwater/index.html`. The back end follows the
 
 ---
 
-## 9. Suggested snapshot keys
+## 9. Snapshot shape
 
-`displayed_snapshot` is what your screen showed the user when they pressed Save. Use the raw ArcGIS field names as keys, so nobody has to guess what a label means. Use `null` for a missing value.
+`displayed_snapshot` records what the inspector saw and entered when they pressed Save. The drop-in (`static-site/inspection-backend-core.mjs`, `snapshotOf`) sends this shape:
 
 ```ts
-const attrs = graphic.attributes
 const displayed_snapshot = {
-  Facility_T: attrs.Facility_T ?? null,
-  Facility_N: attrs.Facility_N ?? null,
-  MDE_SF_Num: attrs.MDE_SF_Num ?? null,
-  UMBC_PRF: attrs.UMBC_PRF ?? null,
+  arcgis: { ...graphic.attributes },   // every attribute of the feature, raw ArcGIS field names, JSON-safe
+  form: {                              // the five editable form fields as shown at Save, each at most 500 characters
+    verified_campus_location: "…",
+    nearby_address: "…",
+    address_kind: "…",
+    condition_status: "…",
+    last_inspection: "…",
+  },
 }
 ```
 
 Example stored value (made-up values):
 
 ```json
-{ "Facility_T": "Example type", "Facility_N": "Example name", "MDE_SF_Num": null, "UMBC_PRF": "Example ref" }
+{ "arcgis": { "bmp_name": "Example name", "bmp_type": "Example type", "ms4_bmp_id": null },
+  "form": { "verified_campus_location": "North side of lot 9", "nearby_address": "", "address_kind": "", "condition_status": "Good", "last_inspection": "" } }
 ```
 
-- Send only what you displayed. The spec says to save the displayed subset, not the whole record.
-- Use `?? null`. `undefined` is dropped when the object becomes JSON, so the key would be missing.
+- If the whole object would pass about 15,000 bytes, `arcgis` keeps only the identifying fields `bmp_name`, `bmp_sequence`, `ms4_bmp_id` and `bmp_type`.
+- This saves more than the spec's displayed subset (spec line 43): every attribute plus the form section.
+- Use `null` for a missing attribute. `undefined` is dropped when the object becomes JSON, so the key would be missing.
 - Convert dates and other non-JSON values to strings or numbers first. Do not send geometry.
-- It must be a JSON object, not an array. The limit is about 16 KB. Postgres measures its own rendering of the JSON, which is slightly longer than `JSON.stringify` output. A snapshot of a few fields is far below the limit.
+- It must be a JSON object, not an array. The limit is about 16 KB. Postgres measures its own rendering of the JSON, which is slightly longer than `JSON.stringify` output.
+- Rows saved by other callers, such as `stormwater/auth-test.html`, have no `form` key; the dashboard shows "No extra fields saved" for them.
 - **It is not verified.** Nothing checks it against ArcGIS. This is a known gap against spec line 53. Do not describe it as verified in the UI.
 
 ---

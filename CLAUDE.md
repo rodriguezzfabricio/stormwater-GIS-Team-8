@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is a CMSC447 (UMBC) project: a Stormwater BMP digital inspection system. What lives here:
 
-- `static-site/` — the team's working frontend (owned by the frontend teammates): ArcGIS map with BMP selection, inspection form. Node tests run as `node static-site/test-*.mjs`. The backend connection is the drop-in `inspection-backend.mjs` + `inspection-backend-core.mjs` + `supabase-config.js`, documented for teammates in `BACKEND-GUIDE.md`; change those only together with `supabase/`.
+- `static-site/` — the team's working frontend (owned by the frontend teammates): Google sign-in (`login.html`), ArcGIS map with BMP selection, inspection form with Save and the inspector's own history. Node tests run as `node static-site/test-*.mjs`. The backend connection is the drop-in `inspection-backend.mjs` + `inspection-backend-core.mjs` + `supabase-config.js`, documented for teammates in `BACKEND-GUIDE.md`; change those only together with `supabase/`.
 - `stormwater/` — the original static prototype that embeds UMBC's secured ArcGIS WebMap, plus the Supabase test page. No build step, no package.json, no linter.
 - `supabase/` — the back end in the shared Supabase project `fsrsldketzmcjyvjueki`:
   - `migrations/` — applied to the shared project. Never edit an applied one; a fix is a new migration. Only rodriguezzfabricio applies them. Write the file first, apply the same text via the Supabase MCP, then rename the file to the version Supabase recorded.
@@ -40,7 +40,7 @@ Read `app/docs/superpowers/specs/2026-10-26-bmp-inspection-demo-design.md` befor
 
 - Stack: Next.js + TypeScript (App Router), a client-only ArcGIS map component, Supabase Auth + Postgres with row-level security. Scope is a 2D map and an authenticated inspection form, with the inspector's own history after reload.
 - GIS data is read-only reference geometry. Inspection records are app-owned and stored separately (append-only, with a snapshot of the verified attributes).
-- BMP layer: item `cc6a7a27c267435c8f7ed95a59eb5f24`, FeatureServer layer 3 (`BMP_Database`, object-ID field `OBJECTID_1`, ~121 rows). `MDE_SF_Num` / `UMBC_PRF` repeat across features, so never use them alone as keys. The provisional unique reference is source item + layer + object ID, mapped to an app UUID.
+- BMP layer (changed 2026-10-28, spec `docs/spec/v1.md` A1): `UMBC_BMP_ArcGIS_Import`, item `5d70e438bb6045d6b3af05aee061e3cd`, layer 0 (116 rows, shared only with the "Stormwater ArcGIS Map" group). Its object-ID field has not been written down; code reads `layer.objectIdField`. It replaces item `cc6a7a27c267435c8f7ed95a59eb5f24` layer 3 (`BMP_Database`), whose saved rows stay in the database but are no longer returned. Attributes such as `ms4_bmp_id` can repeat across features, so never use them alone as keys. The provisional unique reference is source item + layer + object ID, mapped to an app UUID.
 - Inspection create uses a client-generated draft UUID as the retry/idempotency key. Success is shown only after the backend confirms the save.
 - ArcGIS identity and Supabase identity are separate. Don't reuse another browser's tokens, change ArcGIS sharing, or enable service editing/attachments to unblock development.
 
