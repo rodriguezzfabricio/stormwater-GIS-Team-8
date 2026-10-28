@@ -1,2 +1,11 @@
 .DS_Store
 app/.git.nested-backup/
+
+# Secrets: Google OAuth client downloads and local env files.
+client_secret*.json
+.env
+.env.*
+!.env.example
+
+# Supabase CLI scratch.
+supabase/.temp/
