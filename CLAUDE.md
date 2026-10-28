@@ -6,7 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is a CMSC447 (UMBC) project: a Stormwater BMP digital inspection system. What lives here:
 
-- `stormwater/` — a static HTML/CSS/vanilla-JS prototype that embeds UMBC's secured ArcGIS WebMap. No build step, no package.json, no tests, no linter.
+- `static-site/` — the team's working frontend (owned by the frontend teammates): ArcGIS map with BMP selection, inspection form. Node tests run as `node static-site/test-*.mjs`. The backend connection is the drop-in `inspection-backend.mjs` + `inspection-backend-core.mjs` + `supabase-config.js`, documented for teammates in `BACKEND-GUIDE.md`; change those only together with `supabase/`.
+- `stormwater/` — the original static prototype that embeds UMBC's secured ArcGIS WebMap, plus the Supabase test page. No build step, no package.json, no linter.
 - `supabase/` — the back end in the shared Supabase project `fsrsldketzmcjyvjueki`:
   - `migrations/` — applied to the shared project. Never edit an applied one; a fix is a new migration. Only rodriguezzfabricio applies them. Write the file first, apply the same text via the Supabase MCP, then rename the file to the version Supabase recorded.
   - `tests/` — rule tests in one transaction ending in ROLLBACK.

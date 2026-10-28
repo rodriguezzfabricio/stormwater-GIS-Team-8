@@ -7,7 +7,7 @@ set -euo pipefail
 REF=fsrsldketzmcjyvjueki
 API="https://api.supabase.com/v1/projects/$REF/config/auth"
 SITE_URL="http://localhost:3000"
-REDIRECTS=("http://localhost:3000/**" "http://localhost:5500/auth-test.html")
+REDIRECTS=("http://localhost:3000/**" "http://localhost:5500/auth-test.html" "http://localhost:5500/**")
 HOOK_URI="pg-functions://postgres/public/hook_restrict_umbc_signup"
 
 usage() {
@@ -16,7 +16,8 @@ Usage: ${0##*/} <mode> [args]
 
   google <client.json>  enable Google sign-in from a Google OAuth client JSON,
                         set the site URL, merge the localhost redirect URLs
-  hook                  enable the before-user-created hook (@umbc.edu only);
+  redirects             only merge the redirect URLs (no client JSON needed)
+  hook                enable the before-user-created hook (@umbc.edu only);
                         public.hook_restrict_umbc_signup must already exist,
                         or every sign-up fails
   hook-off              disable the hook (rollback)
@@ -32,7 +33,7 @@ die() { echo "error: $*" >&2; exit 1; }
 mode=${1:-}
 case $mode in
   google) [[ $# -eq 2 ]] || { usage >&2; exit 2; } ;;
-  hook | hook-off) [[ $# -eq 1 ]] || { usage >&2; exit 2; } ;;
+  redirects | hook | hook-off) [[ $# -eq 1 ]] || { usage >&2; exit 2; } ;;
   -h | --help) usage; exit 0 ;;
   *) usage >&2; exit 2 ;;
 esac
@@ -109,14 +110,19 @@ echo "Before:"
 api GET
 show
 
+# Keep existing redirect URLs; append ours; drop blanks and duplicates.
+merged_redirects() {
+  local current
+  current=$(jq -r '.uri_allow_list // ""' "$tmp/resp")
+  jq -nr --arg cur "$current" '
+    reduce (($cur | split(",") | map(gsub("^\\s+|\\s+$"; ""))) + $ARGS.positional)[] as $u
+      ([]; if $u == "" or any(.[]; . == $u) then . else . + [$u] end)
+    | join(",")' --args "${REDIRECTS[@]}"
+}
+
 case $mode in
   google)
-    # Keep existing redirect URLs; append ours; drop blanks and duplicates.
-    current=$(jq -r '.uri_allow_list // ""' "$tmp/resp")
-    allow=$(jq -nr --arg cur "$current" '
-      reduce (($cur | split(",") | map(gsub("^\\s+|\\s+$"; ""))) + $ARGS.positional)[] as $u
-        ([]; if $u == "" or any(.[]; . == $u) then . else . + [$u] end)
-      | join(",")' --args "${REDIRECTS[@]}")
+    allow=$(merged_redirects)
     # The secret goes straight from the client JSON into the body file.
     jq --arg site "$SITE_URL" --arg allow "$allow" '(.web // .installed) as $c | {
         external_google_enabled: true,
@@ -124,6 +130,9 @@ case $mode in
         external_google_secret: $c.client_secret,
         site_url: $site,
         uri_allow_list: $allow}' "$client" >"$tmp/body.json"
+    ;;
+  redirects)
+    jq -n --arg allow "$(merged_redirects)" '{uri_allow_list: $allow}' >"$tmp/body.json"
     ;;
   hook)
     jq -n --arg uri "$HOOK_URI" '{

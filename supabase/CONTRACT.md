@@ -5,6 +5,8 @@ Date: 2026-10-27
 Latest migration: `20261028024605_umbc_signup_hook`
 Types: [`database.types.ts`](./database.types.ts) (carries the same `Contract-Version`; if the two differ, ask for a fresh copy)
 
+> **Building in `static-site/`? You don't need this file.** Use the drop-in module `static-site/inspection-backend.mjs` and follow [`static-site/BACKEND-GUIDE.md`](../static-site/BACKEND-GUIDE.md). It already handles everything below. This contract is the low-level reference behind it.
+
 This file is the whole agreement between the back end and your app. You do not need to read any SQL.
 
 You get:
@@ -62,6 +64,7 @@ Copy [`database.types.ts`](./database.types.ts) into your app. Ignore `hook_rest
 | Site URL | `http://localhost:3000` |
 | Allowed redirect | `http://localhost:3000/**` |
 | Allowed redirect | `http://localhost:5500/auth-test.html` (the back end's test page) |
+| Allowed redirect | `http://localhost:5500/**` (the `static-site/` pages) |
 
 Any path under `http://localhost:3000/` works. If your `redirectTo` is not on the list, Supabase sends the user to the Site URL instead. A deployed URL is not on the list yet; ask rodriguezzfabricio to add it.
 

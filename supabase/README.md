@@ -53,6 +53,7 @@ Latest migration: `20261028024605_umbc_signup_hook`.
 | Google provider | enabled, client `448117214298-qcni…` (truncated on purpose) | Applied 2026-10-27. Sign-in with `frodrig3@umbc.edu` succeeded. |
 | Site URL | `http://localhost:3000` | Applied 2026-10-27 |
 | Redirect URLs | `http://localhost:3000/**` and `http://localhost:5500/auth-test.html` | Applied 2026-10-27 |
+| Redirect URL for `static-site/` | `http://localhost:5500/**` | Applied 2026-10-27 by rodriguezzfabricio (`configure-auth.sh redirects`). |
 | Before-user-created hook | URI `pg-functions://postgres/public/hook_restrict_umbc_signup` | Turned on 2026-10-27 by rodriguezzfabricio (`configure-auth.sh hook`). Verified through the API: email sign-ups for `hook-test@example.com` and `hook-test@evilumbc.edu` returned HTTP 403 "Only @umbc.edu accounts can sign up." and no user was created. |
 | Email + password | left on as a fallback, per the design | Supabase's built-in email service only sends to members of the Supabase organization, so it works only for teammates added there. |
 | Leaked-password protection | not enabled | Applies only to the email + password fallback. May require the Pro plan. |
@@ -143,7 +144,12 @@ Then check it: sign in on `auth-test.html` with a non-UMBC Google account. Sign-
 Other script modes:
 
 - `configure-auth.sh google <client.json>`: enables Google from a Google OAuth client JSON, sets the Site URL, and adds the redirect URLs listed in the script's `REDIRECTS` array while keeping existing ones. To allow a new URL (for example a deployed frontend), add it to `REDIRECTS` and re-run. Keep the client JSON out of the repo; `client_secret*.json` is already in `.gitignore`.
+- `configure-auth.sh redirects`: adds the `REDIRECTS` list to the allowed redirect URLs, keeping existing ones. No client JSON needed.
 - `configure-auth.sh hook-off`: turns the hook off (rollback).
+
+### Frontend connection (`static-site/`)
+
+The team's frontend connects through `static-site/inspection-backend.mjs` (browser module) and `static-site/inspection-backend-core.mjs` (pure rules, unit-tested by `node static-site/test-inspection-backend.mjs`). Teammates follow `static-site/BACKEND-GUIDE.md`; `static-site/backend-check.html` is a 2-minute self-test. If a function signature or error changes here, update `inspection-backend-core.mjs` and its test in the same PR.
 
 ### Roll back
 
