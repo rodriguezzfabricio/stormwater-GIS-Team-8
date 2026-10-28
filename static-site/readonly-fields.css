@@ -1,0 +1,12 @@
+/* Inspection-only read-only ArcGIS metadata styling. */
+.inspection-form .form-grid input[readonly] {
+  background:#eef3f8;
+  border-color:#d9e2ed;
+  color:#334c65;
+  cursor:default;
+  box-shadow:none;
+}
+.inspection-form .form-grid input[readonly]:focus-visible {
+  outline:2px solid #afbed0;
+  outline-offset:2px;
+}
