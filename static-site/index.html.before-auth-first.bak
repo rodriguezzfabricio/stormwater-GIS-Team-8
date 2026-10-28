@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="UMBC Stormwater GIS — campus stormwater facilities and inspections.">
+  <meta name="theme-color" content="#142033">
+  <title>UMBC Stormwater | Campus GIS Workspace</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="readonly-fields.css">
+  <!-- The frontend is still static HTML/CSS/JS. OAuth is managed by Esri, not by our server. -->
+  <script src="arcgis-config.js"></script>
+  <script type="module" src="https://js.arcgis.com/5.1/"></script>
+  <script type="module" src="map.js"></script>
+  <script type="module" src="map-fullscreen.js"></script>
+  <link rel="stylesheet" href="brand-logo.css">
+</head>
+<body>
+  <!-- Icons are inline so the starter website has no icon library or framework dependency. -->
+  <svg xmlns="http://www.w3.org/2000/svg" class="svg-sprite" aria-hidden="true" focusable="false">
+    <symbol id="i-drop" viewBox="0 0 24 24"><path d="M12 2.5c-2.5 4-7 9.2-7 13.1A7 7 0 0 0 19 15.6C19 11.7 14.5 6.5 12 2.5Z"/><path d="M9 16a3 3 0 0 0 3 3"/></symbol>
+    <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></symbol>
+    <symbol id="i-map" viewBox="0 0 24 24"><path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3Z"/><path d="M9 3v15M15 6v15"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24"><path d="M20 10c0 5-8 11.5-8 11.5S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></symbol>
+    <symbol id="i-clipboard" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="16" rx="2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h6"/></symbol>
+    <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 2 9 5-9 5-9-5 9-5ZM3 12l9 5 9-5M3 17l9 5 9-5"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/></symbol>
+    <symbol id="i-arrow-up" viewBox="0 0 24 24"><path d="M7 17 17 7M8 7h9v9"/></symbol>
+    <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M4 12h16m-7-7 7 7-7 7"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="m12 2 9 4v6c0 5-3.6 8.5-9 10-5.4-1.5-9-5-9-10V6Z"/><path d="m8.5 12 2.5 2.5 4.5-5"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m4 12 5 5L20 6"/></symbol>
+    <symbol id="i-picture" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 16-5-5-9 10"/></symbol>
+  </svg>
+  <a class="skip-link" href="#main-content">Skip to content</a>
+
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Primary navigation">
+      <a class="brand" href="#overview" aria-label="UMBC Stormwater home">
+        <span class="brand-mark" aria-hidden="true"><img class="brand-logo-image" src="assets/stormwater-logo.png" alt="" width="50" height="50"></span>
+        <span class="brand-words"><strong>UMBC</strong><span>STORMWATER GIS</span></span>
+      </a>
+
+      <div class="sidebar-inner">
+        <nav class="side-nav" aria-label="Workspace sections">
+          <p class="nav-heading">WORKSPACE</p>
+          <a class="nav-item" href="#overview"><svg class="icon"><use href="#i-grid"></use></svg><span>Overview</span></a>
+          <a class="nav-item nav-active" href="#campus-map" aria-current="location"><svg class="icon"><use href="#i-map"></use></svg><span>Campus map</span></a>
+          <a class="nav-item" href="#inspection-draft"><svg class="icon"><use href="#i-clipboard"></use></svg><span>Inspections</span></a>
+        </nav>
+</div>
+    </aside>
+
+    <main id="main-content" class="main-content">
+      <header class="topbar" id="overview">
+        <div class="breadcrumb">Workspace <span aria-hidden="true">/</span> <strong>Campus overview</strong></div>
+      </header>
+
+      <div class="content-wrap">
+
+        <section id="campus-map" class="section-block" aria-labelledby="map-section-title">
+          <div class="section-heading">
+            <div><h2 id="map-section-title">Campus stormwater map</h2><p>Choose a stormwater BMP by name or click its map marker to view its real attributes and pre-fill the inspection form.</p></div>
+            <button class="text-link map-expand-link" type="button" data-map-expand aria-label="Expand the campus map to fullscreen">Full map <svg class="icon"><use href="#i-arrow-up"></use></svg></button>
+          </div>
+
+          <div class="map-layout">
+            <div class="map-card" id="stormwater-map-card">
+              <div class="map-fullscreen-toolbar" aria-label="Fullscreen map controls">
+                <div class="map-fullscreen-heading"><svg class="icon"><use href="#i-layers"></use></svg><div><strong>UMBC Campus Stormwater Map</strong><span>Select a BMP marker to view its details</span></div></div>
+                <button type="button" id="exit-map-fullscreen" class="btn map-exit-button">Exit fullscreen <span aria-hidden="true">✕</span></button>
+              </div>
+              <div class="map-access-note" role="note">
+                <div class="map-access-copy"><strong>ArcGIS organizational map</strong><span id="map-access-description">To view a secured UMBC WebMap here, configure an approved ArcGIS OAuth client ID.</span></div>
+                <button class="btn btn-primary map-access-button" type="button" data-map-expand>Full map <svg class="icon"><use href="#i-arrow-up"></use></svg></button>
+              </div>
+              <div class="map-frame" id="map-surface" aria-label="UMBC stormwater map workspace">
+                <div id="selected-bmp-indicator" class="selected-bmp-indicator" aria-live="polite" aria-atomic="true" hidden>
+                  <span class="selected-bmp-indicator-dot" aria-hidden="true"></span>
+                  <div><span class="selected-bmp-indicator-label">Selected BMP</span><strong id="selected-bmp-name"></strong></div>
+                </div>
+                <div class="map-placeholder" id="map-placeholder" role="status" aria-live="polite">
+                  <span class="map-placeholder-icon"><svg class="icon"><use href="#i-layers"></use></svg></span>
+                  <h3 id="map-status-title">Setting up ArcGIS access</h3>
+                  <p id="map-status-body">Checking your local ArcGIS configuration…</p>
+                  <button class="btn btn-primary" id="arcgis-sign-in" type="button" hidden>Sign in to ArcGIS</button>
+                  <p class="map-status-help" id="map-status-help">Use “Full map” to enlarge this map without leaving the website.</p>
+                </div>
+              </div>
+              <div class="map-footer"><span><svg class="icon"><use href="#i-info"></use></svg> Choose a BMP tag to inspect its real attributes. Existing ArcGIS source data is not changed.</span><button class="map-footer-expand" type="button" data-map-expand>Full map <svg class="icon"><use href="#i-arrow-up"></use></svg></button></div>
+            </div>
+
+            <aside id="facility-guide" class="details-card" aria-labelledby="facility-details-title">
+              <div class="details-top"><div><div class="details-overline">LIVE FEATURE SELECTION</div><h3 id="facility-details-title">Facility details</h3></div><span class="soon-label live-label">ARCGIS LINKED</span></div>
+              <label class="layer-picker" for="bmp-drain-select">All available BMP
+                <select id="bmp-drain-select" aria-label="Select a stormwater BMP by name" disabled><option value="">Loading available BMPs…</option></select>
+              </label>
+              <p id="selection-message" class="selection-message" role="status" aria-live="polite">Sign in and click a BMP tag on the map.</p>
+              <div class="details-scroll" id="facility-scroll" tabindex="0" aria-label="Scrollable facility information">
+              <div id="facility-empty" class="empty-facility"><span class="pin-circle"><svg class="icon"><use href="#i-pin"></use></svg></span><strong>No facility selected</strong><p>Choose a BMP from the dropdown above or click a BMP marker to inspect its attributes.</p></div>
+              <div id="facility-selected" hidden>
+                <h4 class="facility-name" id="facility-title"></h4>
+                <dl class="details-list">
+                  <div><dt>MS4 BMP ID / Asset tag</dt><dd id="facility-tag">—</dd></div>
+                  <div><dt>BMP type</dt><dd id="facility-type">—</dd></div>
+                  <div><dt>BMP sequence</dt><dd id="facility-sequence">—</dd></div>
+                  <div><dt>SWM tracking number</dt><dd id="facility-tracking">—</dd></div>
+                  <div><dt>Project name</dt><dd id="facility-project">—</dd></div>
+                  <div><dt>Outfall point</dt><dd id="facility-outfall">—</dd></div>
+                  <div><dt>Drainage area</dt><dd id="facility-drainage">—</dd></div>
+                  <div><dt>Nearby building / street (approx.)</dt><dd id="facility-nearby-address" aria-live="polite">—</dd></div>
+                  <div><dt>ArcGIS location / coordinates</dt><dd id="facility-location">—</dd></div>
+                  <div><dt>Latitude</dt><dd id="facility-latitude">—</dd></div>
+                  <div><dt>Longitude</dt><dd id="facility-longitude">—</dd></div>
+                  <div><dt>Source Excel row</dt><dd id="facility-source-row">—</dd></div>
+                  <div><dt>CSV index</dt><dd id="facility-csv-index">—</dd></div>
+                  <div><dt>Condition/status</dt><dd id="facility-status">—</dd></div>
+                  <div><dt>Last inspection</dt><dd id="facility-inspected">—</dd></div>
+                  <div><dt>Source layer</dt><dd id="facility-source">—</dd></div>
+                </dl>
+                <p class="nearby-location-note" id="facility-nearby-note" aria-live="polite">Nearby locations are estimates from a geocoder and must be verified on-site.</p>
+                <p class="location-note" id="facility-location-note" hidden>ArcGIS provides geographic coordinates for this BMP, not a verified campus building or street address.</p>
+                <details class="attribute-panel" open>
+                  <summary>All ArcGIS source attributes (including missing values)</summary>
+                  <dl id="facility-attributes" class="attribute-rows"></dl>
+                </details>
+              </div>
+              </div>
+              <button class="btn btn-outline full-width" type="button" id="start-inspection" disabled>Start inspection <svg class="icon"><use href="#i-arrow-right"></use></svg></button>
+              <p class="details-note">Only attributes returned by the selected ArcGIS feature are shown. Unknown values aren't invented.</p>
+            </aside>
+          </div>
+        </section>
+
+        <section id="inspection-draft" class="section-block form-section" aria-labelledby="inspection-title">
+          <div class="section-heading"><div><h2 id="inspection-title">Inspection form</h2><p>Select a BMP on the map or in the BMP dropdown. The form pre-fills from ArcGIS. Core facility identifiers and coordinates are locked; other inspection fields can be edited.</p></div></div>
+          <div class="form-shell">
+            <div class="form-intro"><div class="form-intro-icon"><svg class="icon"><use href="#i-clipboard"></use></svg></div><div><strong>New stormwater inspection</strong><p>The selected BMP is linked in this browser session only. Inspection entries are not saved or submitted.</p></div></div>
+            <form class="inspection-form" autocomplete="off">
+              <!-- Disabled default submit prevents Enter from sending preview data anywhere. -->
+              <button type="submit" disabled hidden aria-hidden="true"></button>
+              <fieldset><legend>Facility information <span id="inspection-selected-caption">Select a BMP tag on the map to auto-fill</span></legend>
+                <div class="inspection-prefill-toolbar">
+                  <p class="prefill-note">Facility identity, BMP classification, drainage identifiers, and geographic coordinates are <strong>auto-filled and locked</strong>. Other available inspection fields can be corrected without changing ArcGIS source data.</p>
+                  <button class="btn btn-muted" type="button" id="restore-arcgis-fields" disabled>Restore editable fields</button>
+                </div>
+                <p id="inspection-edit-status" class="inspection-edit-status" aria-live="polite">Select a BMP to pre-fill the form. Selecting another BMP starts a new draft.</p>
+                <div class="form-grid">
+                  <label class="full-span">BMP / facility name<input type="text" name="facility_name" placeholder="Select a BMP on the map" readonly title="Auto-filled from ArcGIS; not editable"></label>
+                  <label>MS4 BMP ID / Asset tag<input type="text" name="asset_tag" placeholder="Not provided by ArcGIS" readonly title="Auto-filled from ArcGIS; not editable"></label>
+                  <label>BMP type<input type="text" name="bmp_type" placeholder="Not provided by ArcGIS" readonly title="Auto-filled from ArcGIS; not editable"></label>
+                  <label>BMP sequence<input type="text" name="bmp_sequence" placeholder="Not provided by ArcGIS" readonly title="Auto-filled from ArcGIS; not editable"></label>
+                  <label>SWM tracking number<input type="text" name="swm_tracking_number" placeholder="Not provided by ArcGIS" readonly title="Auto-filled from ArcGIS; not editable"></label>
+                  <label>Outfall point<input type="text" name="outfall_point" placeholder="Not provided by ArcGIS" readonly title="Auto-filled from ArcGIS; not editable"></label>
+                  <label>Drainage area<input type="text" name="drainage_area" placeholder="Not provided by ArcGIS" readonly title="Auto-filled from ArcGIS; not editable"></label>
+                  <label class="full-span">Campus building or nearby street (approximate lookup)<input type="text" name="nearby_address" placeholder="Select a BMP to look up an approximate location"></label>
+                  <label class="full-span">Location lookup accuracy / source<input type="text" name="address_kind" placeholder="Not supplied — enter if known"></label>
+                  <label class="full-span">ArcGIS location / geographic coordinates<input type="text" name="location" placeholder="Not provided by ArcGIS" readonly title="Auto-filled from ArcGIS; not editable"></label>
+                  <label class="full-span">Verified campus building / street / access directions <span class="label-hint">(optional; entered by inspector)</span><input type="text" name="verified_campus_location" placeholder="Example: Near building entrance, north side of parking lot"></label>
+                  <label>Latitude<input type="text" name="latitude" placeholder="Not provided by ArcGIS" readonly title="Auto-filled from ArcGIS; not editable"></label>
+                  <label>Longitude<input type="text" name="longitude" placeholder="Not provided by ArcGIS" readonly title="Auto-filled from ArcGIS; not editable"></label>
+                  <label>Condition/status<input type="text" name="condition_status" placeholder="Not supplied — enter if known"></label>
+                  <label>Last inspection<input type="text" name="last_inspection" placeholder="Not supplied — enter if known"></label>
+                  <label class="full-span">ArcGIS source layer <span class="label-hint">(source metadata, read-only)</span><input type="text" name="source_layer" readonly></label>
+                  <input type="hidden" name="facility_reference">
+                  <input type="hidden" name="arcgis_layer">
+                  <input type="hidden" name="arcgis_fields">
+                </div>
+                <details class="attribute-panel inspection-attribute-panel" open>
+                  <summary>Additional ArcGIS attributes (read-only reference)</summary>
+                  <dl id="inspection-source-fields" class="attribute-rows"></dl>
+                </details>
+              </fieldset>
+              <fieldset><legend>Inspection details <span>Preview controls only</span></legend>
+                <div class="form-grid"><label>Inspection type<select name="inspection_type"><option value="">Select inspection type</option><option>Routine</option><option>Follow-up</option><option>Post-storm</option><option>Other</option></select></label><label>Inspection result<select name="inspection_result"><option value="">Select result</option><option>Pass</option><option>Fail</option><option>Needs verification</option></select></label><label class="full-span">Observations<textarea name="observations" rows="4" placeholder="Describe the facility condition, findings, and recommended next steps..."></textarea></label><label class="full-span">Supporting photos <span class="label-hint">(files are not uploaded)</span><span class="file-input-wrap"><svg class="icon"><use href="#i-picture"></use></svg><input type="file" name="photos" accept="image/*" multiple></span></label></div>
+              </fieldset>
+              <div class="form-actions"><span><svg class="icon"><use href="#i-info"></use></svg> No inspection data is submitted.</span><button class="btn btn-muted" type="reset">Clear inspection &amp; restore fields</button><button class="btn btn-disabled" type="button" disabled title="Backend submission will be added later">Submit inspection · coming later</button></div>
+            </form>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+</body>
+</html>
