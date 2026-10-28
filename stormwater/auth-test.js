@@ -5,8 +5,8 @@
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/+esm";
 
 const settings = window.STORMWATER_SUPABASE || {};
-const SOURCE_ITEM = "cc6a7a27c267435c8f7ed95a59eb5f24";  // The only BMP source item the database accepts.
-const LAYER_ID = 3;  // BMP_Database layer.
+const SOURCE_ITEM = "5d70e438bb6045d6b3af05aee061e3cd";  // The only BMP source item the database accepts.
+const LAYER_ID = 0;  // UMBC_BMP_ArcGIS_Import layer.
 const REDIRECT_URL = "http://localhost:5500/auth-test.html";  // Must be in the Supabase redirect allowlist.
 
 const authStatus = document.getElementById("auth-status");

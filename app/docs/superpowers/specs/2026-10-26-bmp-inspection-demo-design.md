@@ -95,4 +95,10 @@ Reviewed for placeholders, contradictory access claims, unique-feature identity,
 - Line 53: the facility snapshot is stored as displayed (displayed_snapshot) and is not verified against ArcGIS.
 - Line 55: asset rows are created on first inspection, limited to an allowlist (item cc6a7a27c267435c8f7ed95a59eb5f24, layer 3, version live) inside create_inspection.
 
+## Deviations (2026-10-28)
+
+- Line 55: the allowlisted BMP layer changes to item 5d70e438bb6045d6b3af05aee061e3cd (UMBC_BMP_ArcGIS_Import), layer 0, the layer the WebMap actually shows. Rows saved against item cc6a7a27c267435c8f7ed95a59eb5f24 layer 3 stay stored but are no longer returned. Source: docs/spec/v1.md A1-A3.
+- Line 43: each inspection saves every attribute of the feature plus five editable form fields ({ arcgis, form }), not only the displayed, verified subset. Source: docs/spec/v1.md AC18, A8.
+- Line 27: switching to another BMP after an unconfirmed save clears the typed values without the discard confirmation. Source: docs/spec/v1.md A20.
+
 See docs/designs/inspection-database-and-umbc-sign-in.md and supabase/CONTRACT.md for the full design and the frontend contract.

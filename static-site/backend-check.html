@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Back-end check</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    [hidden] { display: none !important; }
+    .content-wrap.check-page { max-width: 760px; }
+    .check-banner { background: #fff7df; border: 1px solid #f5e7c8; color: #7a5f1c; border-radius: 8px; padding: 10px 14px; font-size: 13px; font-weight: 700; margin-bottom: 24px; }
+    .check-box { padding: 18px 20px; }
+    .check-box p { margin: 0 0 10px; font-size: 13px; }
+    .check-row { display: flex; gap: 9px; flex-wrap: wrap; align-items: center; margin-top: 12px; }
+    .check-line { font-size: 12px; color: #58697d; word-break: break-word; }
+    .check-line[data-ok="true"] { color: #1d6b3a; }
+    .check-line[data-ok="false"] { color: #b42318; }
+    .btn:disabled { opacity: .55; cursor: not-allowed; }
+    .radio-field { display: flex; flex-direction: column; gap: 7px; color: #4e5e70; font-size: 11px; font-weight: 710; }
+    .radio-row { display: flex; gap: 18px; }
+    .radio-row label { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 480; }
+    .form-grid .radio-row input[type="radio"] { width: auto; padding: 0; }
+    .check-history { list-style: none; margin: 10px 0 0; padding: 0; }
+    .check-history li { border-top: 1px solid var(--line); padding: 10px 0; font-size: 13px; }
+    .check-history span, .check-history small { display: block; color: #718094; font-size: 12px; }
+    .check-history p { margin: 4px 0 0; }
+    code { background: #eef2f7; padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+  </style>
+  <script src="supabase-config.js"></script>
+</head>
+<body>
+  <main class="content-wrap check-page">
+    <div class="check-banner" role="note">Back-end check page — not the product UI. Saving here creates a real inspection record on the real BMP with the object ID you type (layer UMBC_BMP_ArcGIS_Import), and it appears in your own history on the dashboard.</div>
+
+    <section class="section-block" aria-labelledby="signin-title">
+      <div class="section-heading"><div><h2 id="signin-title">1. Sign in</h2><p>Use your @umbc.edu Google account.</p></div></div>
+      <div class="form-shell check-box">
+        <p id="status-line" aria-live="polite">Checking sign-in…</p>
+        <p id="auth-message" class="check-line" aria-live="polite"></p>
+        <div class="check-row">
+          <button class="btn btn-primary" type="button" id="sign-in">Sign in with Google</button>
+          <button class="btn btn-muted" type="button" id="sign-out" hidden>Sign out</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="section-block" aria-labelledby="save-title">
+      <div class="section-heading"><div><h2 id="save-title">2. Save a test inspection</h2><p>The page builds the BMP from the object ID you type, without the map. The record it saves is real.</p></div></div>
+      <div class="form-shell check-box">
+        <div class="form-grid">
+          <label>Object ID<input type="text" id="object-id" inputmode="numeric" value="1"></label>
+          <label>Inspection type<select id="inspection-type"><option>Routine</option><option>Follow-up</option><option>Post-storm</option><option>Other</option></select></label>
+          <div class="full-span radio-field" role="radiogroup" aria-labelledby="result-label">
+            <span id="result-label">Inspection result</span>
+            <div class="radio-row">
+              <label><input type="radio" name="outcome" value="Pass" checked> Pass</label>
+              <label><input type="radio" name="outcome" value="Fail"> Fail</label>
+            </div>
+          </div>
+          <label class="full-span">Observations<textarea id="notes" rows="3" placeholder="Optional"></textarea></label>
+        </div>
+        <p id="feature-line" class="check-line" style="margin-top:12px"></p>
+        <p id="draft-line" class="check-line"></p>
+        <div class="check-row">
+          <button class="btn btn-primary" type="button" id="save">Save</button>
+          <button class="btn btn-muted" type="button" id="new-inspection">New inspection</button>
+        </div>
+        <p id="result" class="check-line" style="margin-top:12px" aria-live="polite"></p>
+        <p class="check-line">After a save this page keeps the same draft, so you can press Save again and see "Already saved". The dashboard starts a new draft after each confirmed save (BACKEND-GUIDE.md, "Saving").</p>
+      </div>
+    </section>
+
+    <section class="section-block" aria-labelledby="history-title">
+      <div class="section-heading"><div><h2 id="history-title">3. Your past inspections of this object ID</h2></div></div>
+      <div class="form-shell check-box">
+        <div class="check-row" style="margin-top:0">
+          <button class="btn btn-muted" type="button" id="refresh-history">Refresh</button>
+        </div>
+        <p id="history-message" class="check-line" style="margin-top:12px" aria-live="polite"></p>
+        <ul id="history-list" class="check-history"></ul>
+      </div>
+    </section>
+
+    <section class="section-block" aria-labelledby="real-title">
+      <div class="section-heading"><div><h2 id="real-title">4. Check the real map layer</h2></div></div>
+      <div class="form-shell check-box">
+        <p>The BMP above is built by hand, so it always passes this check. To test the real map, use the dashboard at <code>/</code>: the selection message says when a clicked feature is not from the accepted layer. If it does, send Fabricio the message text. See BACKEND-GUIDE.md, "How to test".</p>
+      </div>
+    </section>
+  </main>
+
+  <script type="module">
+    import {
+      getUser, signInWithGoogle, finishSignIn, takeSignInMessage, signOut, onUserChange,
+      startInspection, myInspections as loadHistory, checkFeature
+    } from "./inspection-backend.mjs";
+
+    const byId = id => document.getElementById(id);
+    const statusLine = byId("status-line");
+    const authMessage = byId("auth-message");
+    const signInButton = byId("sign-in");
+    const signOutButton = byId("sign-out");
+    const objectIdInput = byId("object-id");
+    const typeSelect = byId("inspection-type");
+    const notesInput = byId("notes");
+    const featureLine = byId("feature-line");
+    const draftLine = byId("draft-line");
+    const saveButton = byId("save");
+    const newButton = byId("new-inspection");
+    const resultLine = byId("result");
+    const historyMessage = byId("history-message");
+    const historyList = byId("history-list");
+
+    let graphic = null;
+    let draft = null;
+    let saving = false;
+    let historyRequest = 0;
+
+    // The same shape the ArcGIS map gives you: a layer plus attributes.
+    function fakeGraphic() {
+      const id = objectIdInput.value.trim();
+      return {
+        layer: { title: "UMBC_BMP_ArcGIS_Import", portalItem: { id: "5d70e438bb6045d6b3af05aee061e3cd" }, layerId: 0, objectIdField: "OBJECTID" },
+        attributes: { OBJECTID: Number(id), bmp_name: "backend-check page" }
+      };
+    }
+
+    function show(line, message, ok) {
+      line.textContent = message;
+      if (ok === null || ok === undefined) delete line.dataset.ok;
+      else line.dataset.ok = String(ok);
+    }
+
+    // One draft = one inspection. Make a new one for each BMP and each new inspection.
+    function newDraft() {
+      graphic = fakeGraphic();
+      draft = startInspection(graphic);
+      const check = checkFeature(graphic);
+      show(featureLine, check.message, check.ok);
+      show(draftLine, `Draft ${draft.id}`, null);
+      show(resultLine, "", null);
+    }
+
+    async function refreshHistory() {
+      const request = ++historyRequest;
+      show(historyMessage, "Loading…", null);
+      const found = await loadHistory(graphic);
+      if (request !== historyRequest) return;   // a newer refresh is running
+      show(historyMessage, found.message, found.ok ? null : false);
+      historyList.replaceChildren();
+      for (const row of found.rows) {
+        const item = document.createElement("li");
+        const head = document.createElement("strong");
+        head.textContent = `${row.outcome.toUpperCase()} · ${row.inspectionType}`;
+        const when = document.createElement("span");
+        when.textContent = row.savedAtText;
+        item.append(head, when);
+        if (row.notes) {
+          const notes = document.createElement("p");
+          notes.textContent = row.notes;
+          item.append(notes);
+        }
+        const record = document.createElement("small");
+        record.textContent = `Record ${row.recordId}`;
+        item.append(record);
+        historyList.append(item);
+      }
+    }
+
+    function render(user) {
+      statusLine.textContent = user ? `Signed in as ${user.email}.` : "Not signed in.";
+      signInButton.hidden = Boolean(user);
+      signOutButton.hidden = !user;
+      refreshHistory();
+    }
+
+    signInButton.addEventListener("click", async () => {
+      signInButton.disabled = true;
+      const started = await signInWithGoogle();   // leaves for Google, then comes back to this page
+      show(authMessage, started.message, started.ok);
+      signInButton.disabled = false;
+    });
+
+    signOutButton.addEventListener("click", async () => {
+      const done = await signOut();
+      show(authMessage, done.message, done.ok);
+      render(await getUser());
+    });
+
+    objectIdInput.addEventListener("change", () => {
+      newDraft();
+      refreshHistory();
+    });
+
+    newButton.addEventListener("click", () => {
+      newDraft();
+      show(resultLine, "Started a new inspection. Press Save to record it.", null);
+    });
+
+    saveButton.addEventListener("click", async () => {
+      if (saving) return;
+      saving = true;
+      saveButton.disabled = true;               // no double clicks while a save runs
+      show(resultLine, "Saving…", null);
+      const current = draft;
+      const picked = document.querySelector('input[name="outcome"]:checked');
+      const result = await current.save({
+        inspectionType: typeSelect.value,
+        outcome: picked ? picked.value : "",
+        notes: notesInput.value
+      });
+      if (current === draft) show(resultLine, result.message, result.ok);
+      saving = false;
+      saveButton.disabled = false;
+      if (result.ok) refreshHistory();
+    });
+
+    byId("refresh-history").addEventListener("click", refreshHistory);
+
+    // Set everything up first, then finish a sign-in that is returning from Google.
+    newDraft();
+    onUserChange(render);
+    const done = await finishSignIn();
+    const notice = takeSignInMessage();   // e.g. a non-UMBC account that was signed out
+    if (notice) show(authMessage, notice, false);
+    else show(authMessage, done.message, done.message ? done.ok : null);
+    render(done.user);
+  </script>
+</body>
+</html>
