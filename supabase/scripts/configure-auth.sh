@@ -121,8 +121,17 @@ merged_redirects() {
 }
 
 case $mode in
-  google)
+  google | redirects)
+    # Assigned on its own line so a jq failure stops the script (set -e does
+    # not see failures inside $(...) used as an argument). Never send an empty
+    # list: that would remove every redirect URL from the shared project.
     allow=$(merged_redirects)
+    [[ -n $allow ]] || { echo "refusing to send an empty redirect URL list" >&2; exit 1; }
+    ;;
+esac
+
+case $mode in
+  google)
     # The secret goes straight from the client JSON into the body file.
     jq --arg site "$SITE_URL" --arg allow "$allow" '(.web // .installed) as $c | {
         external_google_enabled: true,
@@ -132,7 +141,7 @@ case $mode in
         uri_allow_list: $allow}' "$client" >"$tmp/body.json"
     ;;
   redirects)
-    jq -n --arg allow "$(merged_redirects)" '{uri_allow_list: $allow}' >"$tmp/body.json"
+    jq -n --arg allow "$allow" '{uri_allow_list: $allow}' >"$tmp/body.json"
     ;;
   hook)
     jq -n --arg uri "$HOOK_URI" '{

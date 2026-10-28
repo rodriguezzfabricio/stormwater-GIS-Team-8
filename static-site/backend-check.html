@@ -91,7 +91,7 @@
 
   <script type="module">
     import {
-      getUser, signInWithGoogle, finishSignIn, signOut, onUserChange,
+      getUser, signInWithGoogle, finishSignIn, takeSignInMessage, signOut, onUserChange,
       startInspection, myInspections as loadHistory, checkFeature
     } from "./inspection-backend.mjs";
 
@@ -221,7 +221,9 @@
     newDraft();
     onUserChange(render);
     const done = await finishSignIn();
-    show(authMessage, done.message, done.message ? done.ok : null);
+    const notice = takeSignInMessage();   // e.g. a non-UMBC account that was signed out
+    if (notice) show(authMessage, notice, false);
+    else show(authMessage, done.message, done.message ? done.ok : null);
     render(done.user);
   </script>
 </body>

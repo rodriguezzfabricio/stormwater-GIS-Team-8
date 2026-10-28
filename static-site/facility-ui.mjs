@@ -27,11 +27,13 @@ const clearButton = byId("clear-inspection");
 const saveStatus = byId("save-status");
 const historyStatus = byId("history-status");
 const historyList = byId("history-list");
-// Everything the inspector types that a save stores. Locked while a save is in
-// flight, and after a save that was not confirmed, so a retry sends the same values.
-const SAVED_FIELDS = ["inspection_type", "inspection_result", "observations",
-  "verified_campus_location", "nearby_address", "address_kind", "condition_status", "last_inspection"];
-const FORM_SECTION_FIELDS = SAVED_FIELDS.slice(3);
+// The inspector's answers: cleared after a confirmed save, for a new BMP and by Clear.
+const ANSWER_FIELDS = ["inspection_type", "inspection_result", "observations"];
+// The editable fields a save stores in the snapshot's form section (FORM_FIELDS in inspection-backend-core.mjs).
+const FORM_SECTION_FIELDS = ["verified_campus_location", "nearby_address", "address_kind", "condition_status", "last_inspection"];
+// Everything a save stores. Locked while a save is in flight, and after a save
+// that was not confirmed, so a retry sends the same values.
+const SAVED_FIELDS = [...ANSWER_FIELDS, ...FORM_SECTION_FIELDS];
 let backend = null;
 let selectedGraphic = null;
 let draft = null;          // One inspection of the selected BMP: backend.startInspection().
@@ -216,7 +218,7 @@ function showFacility(facility, graphic) {
     // A different BMP also ends an unconfirmed save's lock and starts a new draft.
     unconfirmed = false;
     draft = null;
-    for (const name of ["verified_campus_location", "inspection_type", "inspection_result", "observations"]) {
+    for (const name of [...ANSWER_FIELDS, "verified_campus_location"]) {
       const input = form.elements.namedItem(name);
       if (input) input.value = "";
     }
@@ -316,7 +318,7 @@ async function saveInspection() {
   if (result.ok) {
     // Confirmed (new, already saved, or an earlier attempt that did arrive): next inspection, same BMP.
     unconfirmed = false;
-    for (const name of ["inspection_type", "inspection_result", "observations"]) form.elements.namedItem(name).value = "";
+    for (const name of ANSWER_FIELDS) form.elements.namedItem(name).value = "";
     startDraft();
     applyLock();
     showSaveStatus(result.message, "ok");
@@ -552,10 +554,7 @@ export function connectBmpSelection(mapElement, options = {}) {
   form.addEventListener("reset", event => {
     event.preventDefault();
     if (saving || unconfirmed) return;  // The button is disabled then too.
-    form.elements.namedItem("inspection_type").value = "";
-    form.elements.namedItem("inspection_result").value = "";
-    form.elements.namedItem("observations").value = "";
-    form.elements.namedItem("verified_campus_location").value = "";
+    for (const name of [...ANSWER_FIELDS, "verified_campus_location"]) form.elements.namedItem(name).value = "";
     if (selectedFacility) populateInspection(selectedFacility, {preserveEdits: false});
   });
   startButton.addEventListener("click", () => {

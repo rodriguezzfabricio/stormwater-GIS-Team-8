@@ -52,6 +52,15 @@ assert.deepEqual(huge.form, formSection);
 const widest = snapshotOf(attributesOf({attributes:{bmp_name:'\u{1F30A}'.repeat(500), big:'s'.repeat(20000)}}),
   readFormSection(Object.fromEntries(FORM_FIELDS.map(name => [name, '\u{1F30A}'.repeat(500)]))));
 assert.ok(new TextEncoder().encode(JSON.stringify(widest)).length <= 16384);
+// Cuts count characters as the database does, so an emoji is never split in half.
+const emoji = readFormSection({condition_status:'\u{1F30A}'.repeat(600)}).condition_status;
+assert.equal(Array.from(emoji).length, 500);
+assert.ok(!/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/.test(emoji));
+// Still too big after the identifying-fields fallback (escaped text): every value is shortened.
+const escaped = snapshotOf(attributesOf({attributes:{bmp_name:'\u0001'.repeat(4000)}}),
+  Object.fromEntries(FORM_FIELDS.map(name => [name, '\u0001'.repeat(500)])));
+assert.ok(new TextEncoder().encode(JSON.stringify(escaped)).length <= 15000);
+assert.equal(escaped.form.condition_status.length, 100);
 
 // Fields from the real form (by input name) or from a plain object.
 const form = {elements:{namedItem:name => ({inspection_type:{value:'Routine'}, inspection_result:{value:'Pass'}, observations:{value:'  ok  '}})[name] ?? null}};
@@ -67,6 +76,7 @@ assert.equal(checkFields(args), null);
 assert.equal(checkFields({...args, p_outcome:'needs verification'}).field, 'outcome');
 assert.equal(checkFields({...args, p_inspection_type:''}).field, 'inspection_type');
 assert.equal(checkFields({...args, p_notes:'n'.repeat(4001)}).field, 'notes');
+assert.equal(checkFields({...args, p_notes:'\u{1F30A}'.repeat(4000)}), null); // 4,000 characters, 8,000 UTF-16 units.
 
 // Database errors become plain English, and only a missing reply counts as "maybe saved".
 assert.equal(explainError({code:'P0001', message:'invalid_input:outcome'}, 400).field, 'outcome');
@@ -81,6 +91,12 @@ assert.equal(explainError({code:'42501', message:'permission denied for function
 assert.equal(explainError({code:'PGRST303', message:'JWT expired'}, 401, 'load').message,
   'You are signed out. Sign in again in a new tab, then select the BMP again.');
 assert.equal(explainError({code:'P0001', message:'unknown_source'}, 400, 'load').kind, 'unknown_source');
+// A definite 4xx refusal the page doesn't recognise is "not saved", never "not confirmed".
+const refused = explainError({code:'22P05', message:'unsupported Unicode escape sequence'}, 400);
+assert.equal(refused.kind, 'rejected');
+assert.equal(refused.maybeSaved, false);
+assert.match(refused.message, /Nothing was saved/);
+assert.equal(explainError({code:'', message:'Bad Gateway'}, 502).maybeSaved, true); // A server error may follow a commit.
 const lost = explainError(null, 0);
 assert.equal(lost.kind, 'network');
 assert.equal(lost.maybeSaved, true);

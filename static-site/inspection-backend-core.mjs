@@ -18,6 +18,17 @@ const FORM_VALUE_LIMIT = 500;
 
 export const NON_UMBC_MESSAGE = "Only @umbc.edu accounts can use this app.";
 
+/** Cuts to at most `limit` characters as the database counts them (code points),
+ *  so an emoji is never split into half a character. */
+function cutText(value, limit) {
+  const text = String(value ?? "").trim();
+  return text.length <= limit ? text : Array.from(text).slice(0, limit).join("");
+}
+
+function byteSize(value) {
+  return new TextEncoder().encode(JSON.stringify(value)).length;
+}
+
 /** True only for an address ending in @umbc.edu (any letter case). */
 export function isUmbcEmail(email) {
   return typeof email === "string" && /^[^@\s]+@umbc\.edu$/i.test(email.trim());
@@ -65,16 +76,20 @@ export function readFormSection(input) {
   const named = typeof input?.elements?.namedItem === "function";
   return Object.fromEntries(FORM_FIELDS.map(name => {
     const value = named ? input.elements.namedItem(name)?.value : input?.[name];
-    return [name, String(value ?? "").trim().slice(0, FORM_VALUE_LIMIT)];
+    return [name, cutText(value, FORM_VALUE_LIMIT)];
   }));
 }
 
 /** { arcgis, form }, small enough for the database. */
 export function snapshotOf(attributes, form = {}) {
   const snapshot = { arcgis: attributes || {}, form };
-  if (new TextEncoder().encode(JSON.stringify(snapshot)).length <= SNAPSHOT_LIMIT) return snapshot;
+  if (byteSize(snapshot) <= SNAPSHOT_LIMIT) return snapshot;
   const arcgis = Object.fromEntries(SNAPSHOT_FALLBACK_KEYS.map(name => [name, snapshot.arcgis[name] ?? null]));
-  return { arcgis, form };
+  if (byteSize({ arcgis, form }) <= SNAPSHOT_LIMIT) return { arcgis, form };
+  // Still too big (very long or heavily escaped text): shorten every value so the save can go through.
+  const short = values => Object.fromEntries(Object.entries(values).map(([name, value]) =>
+    [name, typeof value === "string" ? cutText(value, 100) : value]));
+  return { arcgis: short(arcgis), form: short(form) };
 }
 
 /** Accepts the inspection <form> itself, or { inspectionType, outcome, notes }. */
@@ -112,7 +127,7 @@ const FIELD_MESSAGES = Object.freeze({
 export function checkFields(args) {
   if (!args.p_inspection_type || args.p_inspection_type.length > 120) return fieldProblem("inspection_type");
   if (args.p_outcome !== "pass" && args.p_outcome !== "fail") return fieldProblem("outcome");
-  if (args.p_notes.length > 4000) return fieldProblem("notes");
+  if (Array.from(args.p_notes).length > 4000) return fieldProblem("notes");  // Code points, like the database.
   return null;
 }
 
@@ -147,7 +162,12 @@ export function explainError(error, status = 0, action = "save") {
   if (action === "load") {
     return result("network", "Could not load past inspections. Check your connection and try again.");
   }
-  // No reply (or an unexpected one): the save may have reached the database.
+  // A 4xx reply is a definite refusal: nothing was stored, so the form stays editable.
+  if (status >= 400 && status < 500) {
+    return result("rejected", `The server refused this save${code ? ` (code ${code})` : ""}. Nothing was saved. ` +
+      "Check the values and press Save again; if it keeps happening, tell Fabricio.");
+  }
+  // No reply, a server error or an unexpected one: the save may have reached the database.
   return result("network", "No reply from the server, so the save is not confirmed. Press Save again; it will not create a duplicate.", { maybeSaved: true });
 }
 

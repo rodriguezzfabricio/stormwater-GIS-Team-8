@@ -143,6 +143,7 @@ Not checked by hand: the case where a reply is lost after the save reached the d
 | `This feature is from "..." (item ..., layer ...)` | The selected feature is from another layer | Send Fabricio the whole message text. Do not change the code |
 | "Sign-in could not load." | The supabase-js CDN or `supabase-config.js` did not load | Check your connection and reload |
 | "No reply from the server, so the save is not confirmed." | Network problem. It may or may not be saved | Press Save again. It never duplicates |
+| "The server refused this save (code …). Nothing was saved." | The database rejected the request for a reason the page doesn't recognise | Send Fabricio the code. The form stays editable |
 | "You are signed out. Sign in again in a new tab…" | The session ended | Use the link, sign in, come back, press Save again |
 
 ## 5. What not to touch
