@@ -8,7 +8,7 @@ An authenticated inspector selects a real mapped UMBC BMP feature, records an in
 
 Included: 2D campus map, polygon selection, actual feature attributes, inspection form, authenticated save, own-inspection history/detail, loading and error states. Excluded: photos, email, PDF export, administrative workflows, cross-inspector history, offline sync, GIS edits, and 3D features.
 
-The private team repository has one README and one initial commit on its only branch, main. There is no existing application to preserve. Prior reconnaissance and Astra's planning document in the parent workspace provide the evidence for this design.
+The repo now has the static prototype in stormwater/ and the Supabase back end in supabase/ (migrations, tests, contract); the Next.js app in app/ is still not built. There is no existing application to preserve. Prior reconnaissance and Astra's planning document in the parent workspace provide the evidence for this design.
 
 ## Architecture and responsibilities
 
@@ -87,3 +87,12 @@ Deliver committed application source, schema/policy setup files, an environment-
 ## Self-review
 
 Reviewed for placeholders, contradictory access claims, unique-feature identity, retry behavior, scope expansion, and acceptance ambiguity. Remaining external dependencies are explicit gates: authorized ArcGIS application access, a Supabase project/demo account, and the exact presentation slot. None is represented as already provisioned or verified.
+
+## Deviations (2026-10-27)
+
+- Line 25: Google sign-in limited to @umbc.edu (before-user-created hook + a database check on every read/write), with email + password kept as a fallback.
+- Line 17: the browser calls database functions (create_inspection, my_inspections) directly; no server request handlers.
+- Line 53: the facility snapshot is stored as displayed (displayed_snapshot) and is not verified against ArcGIS.
+- Line 55: asset rows are created on first inspection, limited to an allowlist (item cc6a7a27c267435c8f7ed95a59eb5f24, layer 3, version live) inside create_inspection.
+
+See docs/designs/inspection-database-and-umbc-sign-in.md and supabase/CONTRACT.md for the full design and the frontend contract.
