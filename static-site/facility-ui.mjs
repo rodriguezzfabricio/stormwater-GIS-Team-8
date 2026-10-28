@@ -73,50 +73,127 @@ function renderAttributes(entries, target) {
   }
 }
 
+/** UI edits belong to a temporary inspection draft; ArcGIS source objects stay untouched.
+ *  A stable source reference is held separately from every editable display field.
+ */
+const INSPECTION_FIELD_MAP = Object.freeze({
+  facility_name: "facilityName",
+  asset_tag: "assetTag",
+  bmp_type: "bmpType",
+  bmp_sequence: "sequence",
+  swm_tracking_number: "trackingNumber",
+  outfall_point: "outfallPoint",
+  drainage_area: "drainageArea",
+  location: "location",
+  nearby_address: "nearbyAddress",
+  address_kind: "addressKind",
+  latitude: "latitude",
+  longitude: "longitude",
+  condition_status: "status",
+  last_inspection: "lastInspection"
+});
+const originalFormValues = new Map();
+const editedFormFields = new Set();
+const editStatus = byId("inspection-edit-status");
+const restoreButton = byId("restore-arcgis-fields");
+let formFacilityKey = "";
+
+function facilityKey(facility) {
+  const attrs = facility.rawAttributes || {};
+  const objectId = Object.entries(attrs).find(([key]) => /^(?:objectid|fid)$/i.test(key))?.[1];
+  return [facility.source, objectId ?? facility.facilityReference ?? "", facility.facilityName,
+    facility.latitude, facility.longitude].join("|");
+}
+
+function refreshEditStatus() {
+  const count = editedFormFields.size;
+  editStatus.classList.toggle("has-edits", count > 0);
+  editStatus.textContent = !selectedFacility
+    ? "Select a BMP to pre-fill the form. Selecting another BMP starts a new draft."
+    : count
+      ? `${count} editable field${count === 1 ? "" : "s"} changed for this inspection. Locked ArcGIS fields remain unchanged.`
+      : "Core facility fields are locked to ArcGIS values. Other inspection fields can be edited. Selecting another BMP starts a new draft.";
+  restoreButton.disabled = !selectedFacility || count === 0;
+}
+
+function markInspectionField(name) {
+  if (!originalFormValues.has(name)) return;
+  const input = form.elements.namedItem(name);
+  if (!input || input.readOnly) return;
+  const edited = input.value !== originalFormValues.get(name);
+  if (edited) editedFormFields.add(name);
+  else editedFormFields.delete(name);
+  input.closest("label")?.classList.toggle("field-edited", edited);
+  refreshEditStatus();
+}
+
+function clearEditMarkers() {
+  editedFormFields.clear();
+  originalFormValues.clear();
+  for (const name of Object.keys(INSPECTION_FIELD_MAP)) {
+    form.elements.namedItem(name)?.closest("label")?.classList.remove("field-edited");
+  }
+  refreshEditStatus();
+}
+
+// Delegated listener: fields corrected by an inspector are not overwritten when
+// a delayed reverse-geocoding response arrives.
+function handleDraftEdit(event) {
+  const input = event.target;
+  if (input && !input.readOnly && input.name in INSPECTION_FIELD_MAP) markInspectionField(input.name);
+}
+form.addEventListener("input", handleDraftEdit);
+form.addEventListener("change", handleDraftEdit);
+restoreButton.addEventListener("click", () => {
+  if (!selectedFacility) return;
+  populateInspection(selectedFacility, {preserveEdits: false});
+});
+
 /** Prefill every known source field and render ALL original ArcGIS attributes.
  *  Inspection questions remain editable; source identifiers remain read-only.
  */
-function populateInspection(facility) {
-  const values = {
-    facility_name: facility.facilityName,
-    asset_tag: facility.assetTag,
-    bmp_type: facility.bmpType,
-    bmp_sequence: facility.sequence,
-    swm_tracking_number: facility.trackingNumber,
-    project_name: facility.projectName,
-    outfall_point: facility.outfallPoint,
-    drainage_area: facility.drainageArea,
-    location: facility.location,
-    nearby_address: facility.nearbyAddress,
-    address_kind: facility.addressKind,
-    latitude: facility.latitude,
-    longitude: facility.longitude,
-    source_excel_row: facility.sourceExcelRow,
-    csv_index: facility.csvIndex,
-    condition_status: facility.status,
-    last_inspection: facility.lastInspection,
-    source_layer: facility.source
-  };
-  for (const [name, value] of Object.entries(values)) {
+function populateInspection(facility, {preserveEdits = true} = {}) {
+  for (const [name, property] of Object.entries(INSPECTION_FIELD_MAP)) {
     const input = form.elements.namedItem(name);
-    if (input) input.value = value || "Not provided by ArcGIS";
+    if (!input) continue;
+    const original = facility[property] == null ? "" : String(facility[property]);
+    originalFormValues.set(name, original);
+    if (input.readOnly || !preserveEdits || !editedFormFields.has(name)) input.value = original;
+    // Only editable fields can display inspector changes; locked fields always mirror ArcGIS.
+    const changed = !input.readOnly && input.value !== original;
+    if (changed) editedFormFields.add(name);
+    else editedFormFields.delete(name);
+    input.closest("label")?.classList.toggle("field-edited", changed);
   }
-  // Preserve the raw, unmodified source attribute snapshot for a future backend.
-  // The tracking number distinguishes multiple facilities that share an MS4 ID.
-  form.elements.namedItem("facility_reference").value = facility.facilityReference;
-  form.elements.namedItem("arcgis_layer").value = facility.source;
+  form.elements.namedItem("source_layer").value = facility.source || "";
+  form.elements.namedItem("facility_reference").value = facility.facilityReference || "";
+  form.elements.namedItem("arcgis_layer").value = facility.source || "";
   form.elements.namedItem("arcgis_fields").value = JSON.stringify(facility.rawAttributes);
-  renderAttributes(facility.entries, inspectionFields);
+  // Hide excluded administrative CSV columns in the inspection form only.
+  // The facility panel still shows the full source list and arcgis_fields keeps the raw record.
+  const omitInInspection = new Set(["project_name", "source_excel_row", "csv_index", "index"]);
+  const inspectionEntries = facility.entries.filter(entry =>
+    !omitInInspection.has(String(entry.name || "").toLowerCase()) &&
+    !omitInInspection.has(String(entry.label || "").toLowerCase().replaceAll(" ", "_")));
+  renderAttributes(inspectionEntries, inspectionFields);
   const reference = facility.facilityReference || facility.facilityName || "selected BMP";
-  byId("inspection-selected-caption").textContent = `Linked to ${reference} — ArcGIS source data`;
+  byId("inspection-selected-caption").textContent = `Linked to ${reference} — facility IDs and coordinates locked`;
   byId("inspection-selected-caption").classList.add("connected");
+  refreshEditStatus();
 }
-
 function showFacility(facility) {
   const request = ++addressRequest;
+  const sameDrain = formFacilityKey && formFacilityKey === facilityKey(facility);
+  if (!sameDrain) {
+    // Inspection observations are specific to one drain, not portable to another.
+    for (const name of ["verified_campus_location", "inspection_type", "inspection_result", "observations", "photos"]) {
+      const input = form.elements.namedItem(name);
+      if (input) input.value = "";
+    }
+    clearEditMarkers();
+  }
+  formFacilityKey = facilityKey(facility);
   selectedFacility = facility;
-  const verifiedLocation = form.elements.namedItem("verified_campus_location");
-  if (verifiedLocation) verifiedLocation.value = "";
   const displayName = facility.facilityName || facility.assetTag || "Selected BMP facility";
   selectedName.textContent = displayName;
   selectedIndicator.hidden = false;
@@ -142,7 +219,7 @@ function showFacility(facility) {
   const locationNote = byId("facility-location-note");
   locationNote.hidden = facility.locationKind !== "coordinates";
   renderAttributes(facility.entries, fieldRows);
-  populateInspection(facility);
+  populateInspection(facility, {preserveEdits: Boolean(sameDrain)});
   selectionMessage.textContent = facility.entries.length
     ? `Selected ${displayName} from ${facility.source}. ${facility.entries.length} source attribute${facility.entries.length === 1 ? "" : "s"} returned (missing values labelled).`
     : "Selected an ArcGIS feature with no returned attributes.";
@@ -160,7 +237,7 @@ export function connectBmpSelection(mapElement, options = {}) {
   const catalogByKey = new Map();
 
   drainSelect.disabled = true;
-  drainSelect.replaceChildren(new Option("Loading available drains…", ""));
+  drainSelect.replaceChildren(new Option("Loading available BMPs…", ""));
   selectionMessage.textContent = "Loading BMP names from the live ArcGIS map…";
 
   /** Only read operational, authorized ArcGIS layers. Never substitute CSV samples. */
@@ -170,7 +247,7 @@ export function connectBmpSelection(mapElement, options = {}) {
       if (disposed) return;
       catalog = drains;
       catalogByKey.clear();
-      drainSelect.replaceChildren(new Option("Select a campus drain…", ""));
+      drainSelect.replaceChildren(new Option("Select a campus BMP…", ""));
       drainOptions(drains).forEach(({key, label}) => {
         catalogByKey.set(key, drains.find(item => item.key === key));
         drainSelect.add(new Option(label, key));
@@ -179,15 +256,15 @@ export function connectBmpSelection(mapElement, options = {}) {
       if (lastClickedFeature) {
         drainSelect.value = findMatchingDrain(drains, lastClickedFeature)?.key || "";
       }
-      const noun = drains.length === 1 ? "drain" : "drains";
+      const noun = drains.length === 1 ? "BMP" : "BMPs";
       selectionMessage.textContent = selectedFacility ? selectionMessage.textContent : drains.length
         ? `${drains.length} ${noun} loaded from the UMBC ArcGIS map. Select one here or click a map marker.${errors.length ? ` ${errors.length} layer(s) could not be queried; the list may be incomplete.` : ""}`
         : `No queryable BMP features found. ${errors.length ? "ArcGIS layer queries failed; check layer permissions." : "Check the WebMap's BMP layer and its fields."}`;
     } catch {
       if (disposed) return;
-      drainSelect.replaceChildren(new Option("Drain list unavailable", ""));
+      drainSelect.replaceChildren(new Option("BMP list unavailable", ""));
       drainSelect.disabled = true;
-      selectionMessage.textContent = "Unable to load the drain list from ArcGIS. Map-marker selection is still available.";
+      selectionMessage.textContent = "Unable to load the BMP list from ArcGIS. Map-marker selection is still available.";
     }
   }
 
@@ -249,7 +326,7 @@ export function connectBmpSelection(mapElement, options = {}) {
       }
       if (request !== selectionCounter) return;
       if (!match) {
-        selectionMessage.textContent = "No BMP feature was found at this point. Select a drain by name or click a blue BMP marker.";
+        selectionMessage.textContent = "No BMP feature was found at this point. Select a BMP by name or click a blue BMP marker.";
         return; // Keep previously selected facility and inspection draft intact.
       }
 
@@ -298,7 +375,7 @@ export function connectBmpSelection(mapElement, options = {}) {
     form.elements.namedItem("observations").value = "";
     form.elements.namedItem("verified_campus_location").value = "";
     form.elements.namedItem("photos").value = "";
-    if (selectedFacility) populateInspection(selectedFacility);
+    if (selectedFacility) populateInspection(selectedFacility, {preserveEdits: false});
   });
   startButton.addEventListener("click", () => {
     byId("inspection-draft").scrollIntoView({behavior: "smooth", block: "start"});
