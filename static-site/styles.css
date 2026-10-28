@@ -340,3 +340,12 @@ html.map-fullscreen-active, html.map-fullscreen-active body { overflow:hidden; }
 #bmp-drain-select { font-size:12px; font-weight:600; color:#243c58; min-height:42px; }
 #bmp-drain-select:disabled { color:#8291a3; cursor:progress; background:#f3f6fa; }
 #bmp-drain-select:focus-visible { outline:3px solid #ffd56c; outline-offset:2px; border-color:#c79418; }
+
+/* UMBC_FULLSCREEN_PLACEHOLDER_FIX
+   The fullscreen card previously forced display:block on #map-placeholder
+   even after map.js had set hidden=true. That made the loading placeholder
+   fill the map frame and push the live <arcgis-map> beneath the viewport.
+   Keep the placeholder hidden after ArcGIS finishes loading. */
+.map-card:is(:fullscreen, .fullscreen-fallback) .map-frame .map-placeholder[hidden] {
+  display: none !important;
+}
