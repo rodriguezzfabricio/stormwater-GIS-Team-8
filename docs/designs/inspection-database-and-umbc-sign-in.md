@@ -40,6 +40,7 @@ The proposed solution is to put the rules in the database: tables whose default 
 4.  **Each inspector sees only their own inspections.** User B cannot read user A's records, through the frontend or by calling the API directly.
 5.  **Saved inspections cannot be changed or deleted** by any signed-in or signed-out user.
 6.  **Only the real BMP layer can be referenced:** source item `cc6a7a27c267435c8f7ed95a59eb5f24`, layer 3. A caller cannot invent other assets.
+    *Changed 2026-10-28:* the layer becomes item `5d70e438bb6045d6b3af05aee061e3cd` (`UMBC_BMP_ArcGIS_Import`), layer 0, the layer the WebMap shows. See `docs/spec/v1.md` A1-A3 and migration `bmp_source_import_layer`.
 7.  **The frontend teammate can integrate without reading SQL.** `CONTRACT.md` and generated TypeScript types give them every call, field, example, and error code they need.
 8.  **The setup can be repeated.** Every database change exists as a migration file in the repo, applied by one person (rodriguezzfabricio) in a fixed order.
 
@@ -59,6 +60,7 @@ Success means two separate test accounts can each save, reload, and see only the
 *   **Question 1**: Does the frontend teammate plan to use Supabase at all? If their app talks to a different back end, none of this connects. This needs a yes from them before `CONTRACT.md` is final.
 *   **Question 2**: Do all stakeholders have `@umbc.edu` Google accounts? Anyone outside UMBC (for example, a county reviewer) will be locked out by design.
 *   **Question 3**: Does the WebMap in `stormwater/arcgis-config.js` (`d59cb5cc…`) contain the BMP layer from item `cc6a7a27…`? If not, the frontend will send a source item the save function rejects.
+    *Changed 2026-10-28:* answered no. Its BMP layer is item `5d70e438…` layer 0, and the database now accepts that layer instead. See `docs/research/2026-10-27-wire-backend-into-static-site.md`, "Addendum 2026-10-28".
 
 ## Critical User Journeys (CUJs)
 

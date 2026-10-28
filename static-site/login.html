@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>UMBC Stormwater GIS — Sign In</title>
   <link rel="stylesheet" href="login.css">
+  <!-- Public Supabase URL and publishable key only. Must load before login.js. -->
+  <script src="supabase-config.js"></script>
+  <script type="module" src="login.js"></script>
 </head>
 <body>
   <main class="login-page">
@@ -21,39 +24,20 @@
 
       <div class="login-content">
         <h2 id="sign-in-title">Sign in</h2>
-        <p class="subtitle">Access the campus stormwater map and BMP inspection workspace using your authorized UMBC ArcGIS account.</p>
+        <p class="subtitle">Sign in with your UMBC Google account to save inspections. The campus map then asks for your UMBC ArcGIS sign-in.</p>
 
-        <form id="login-form" novalidate>
-          <label for="email">UMBC email</label>
-          <input
-            id="email"
-            name="email"
-            type="email"
-            inputmode="email"
-            autocomplete="username"
-            placeholder="username@umbc.edu"
-            spellcheck="false"
-            required
-          >
-          <label class="password-label" for="password">Password</label>
-          <input
-            id="password"
-            type="password"
-            placeholder="Enter any nonempty test password"
-            autocomplete="off"
-            spellcheck="false"
-            required
-          >
-          <p class="input-hint">For this demo, any nonempty test password works. Do not enter your real UMBC password.</p>
+        <p id="login-message" class="login-message" role="status" aria-live="polite"></p>
+        <button id="google-sign-in" type="button" disabled>Sign in with Google</button>
 
-          <p id="login-error" class="login-error" role="alert" aria-live="polite"></p>
-          <button id="sign-in-button" type="submit">Sign in</button>
-        </form>
+        <div id="signed-in" class="signed-in" hidden>
+          <p>Signed in as <strong id="signed-in-email"></strong></p>
+          <button id="continue" type="button">Continue</button>
+          <button id="sign-out" class="btn-secondary" type="button">Sign out</button>
+        </div>
 
-        <p class="login-help">The demo password is checked only in this browser and immediately cleared. Your actual identity is verified separately by the official UMBC / ArcGIS sign-in. The dashboard remains hidden until ArcGIS authenticates.</p>
+        <p class="login-help">Only @umbc.edu Google accounts can sign in. The dashboard stays hidden until the ArcGIS sign-in also succeeds.</p>
       </div>
     </section>
   </main>
-  <script src="login.js" defer></script>
 </body>
 </html>

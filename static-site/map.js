@@ -1,7 +1,11 @@
-import {connectBmpSelection} from "./facility-ui.mjs";
+import {connectBmpSelection, connectInspectionBackend} from "./facility-ui.mjs";
 
-// ArcGIS Maps SDK (CDN) integration for the static site. No iframe or backend.
+// ArcGIS Maps SDK (CDN) integration for the static site. No iframe.
 // The SDK owns OAuth and tokens; this app never reads or logs token values.
+// The Supabase drop-in (inspection-backend.mjs) owns the inspector's sign-in:
+// it is checked first, so signed-out visitors go to login.html before any
+// ArcGIS redirect. This page is not one of the drop-in's signInPages, so
+// ArcGIS's ?code= here never reaches Supabase.
 const settings = window.STORMWATER_CONFIG || {};
 const surface = document.getElementById("map-surface");
 const placeholder = document.getElementById("map-placeholder");
@@ -16,6 +20,13 @@ const authGate = document.getElementById("stormwater-auth-gate");
 const authGateTitle = document.getElementById("stormwater-auth-title");
 const authGateMessage = document.getElementById("stormwater-auth-message");
 const LOGIN_INTENT_KEY = "umbc-stormwater.arcgis.signin";
+const BACKEND_LOAD_FAILED = "Sign-in could not load. Check your connection and reload.";
+
+// Top bar: who is signed in to save inspections (Supabase, not ArcGIS).
+const accountEmail = document.getElementById("account-email");
+const accountSignIn = document.getElementById("account-sign-in");
+const accountSignOut = document.getElementById("account-sign-out");
+let backend = null;
 
 function setAuthGate(heading, message) {
   authGateTitle.textContent = heading;
@@ -39,6 +50,39 @@ function clearLoginIntent() {
 }
 
 
+/** Loads the drop-in and returns the signed-in @umbc.edu user. Anyone else is
+ *  sent to login.html (the drop-in signs out non-UMBC accounts first). */
+async function requireInspector() {
+  const config = window.STORMWATER_SUPABASE;
+  try {
+    if (!config?.url || !config?.publishableKey) throw new Error("supabase-config.js is missing");
+    backend = await import("./inspection-backend.mjs");
+  } catch {
+    failAuthGate(BACKEND_LOAD_FAILED);
+    return null;
+  }
+  return backend.requireUser();
+}
+
+/** A session that ends here or in another tab only changes this text; the page and form stay. */
+function showAccount(user) {
+  accountEmail.textContent = user ? user.email : "Signed out";
+  accountSignOut.hidden = !user;
+  accountSignIn.hidden = Boolean(user);
+}
+
+function connectAccountBar(user) {
+  showAccount(user);
+  backend.onUserChange(showAccount);
+  // Catches a sign-in finished in another tab.
+  window.addEventListener("focus", async () => showAccount(await backend.getUser()));
+  accountSignOut.addEventListener("click", async () => {
+    accountSignOut.disabled = true;
+    await backend.signOut();
+    window.location.assign(new URL("./login.html", window.location.href).href);
+  });
+}
+
 function showStatus(heading, message, hint = "You can expand this map within the website using the Full map control.") {
   title.textContent = heading;
   description.textContent = message;
@@ -47,6 +91,11 @@ function showStatus(heading, message, hint = "You can expand this map within the
 }
 
 async function start() {
+  const inspector = await requireInspector();
+  if (!inspector) return;  // Redirecting to login.html, or the gate shows why sign-in could not load.
+  connectAccountBar(inspector);
+  connectInspectionBackend(backend);  // Save and history in the inspection form.
+
   const clientId = String(settings.arcgisClientId || "").trim();
   if (!clientId) {
     failAuthGate("ArcGIS OAuth Client ID missing. Check arcgis-config.js.");

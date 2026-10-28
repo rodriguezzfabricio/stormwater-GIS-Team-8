@@ -1,5 +1,5 @@
-// Contract-Version: 1
-// Generated 2026-10-27 from Supabase project fsrsldketzmcjyvjueki after migration 20261028024605_umbc_signup_hook.
+// Contract-Version: 2
+// Generated 2026-10-28 from Supabase project fsrsldketzmcjyvjueki after migration 20261028070220_bmp_source_import_layer.
 // Generated output: never edit by hand; regenerate after any schema change (see supabase/README.md).
 // Known generator quirk: my_inspections Returns.notes is typed string but can be null. See CONTRACT.md.
 // Ignore hook_restrict_umbc_signup: the frontend cannot call it.
