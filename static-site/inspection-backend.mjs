@@ -6,7 +6,8 @@
  */
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/+esm";
 import {
-  featureRef, snapshotOf, readFields, buildSaveArgs, checkFields, explainError, savedResult, historyRow
+  featureRef, attributesOf, readFormSection, snapshotOf, readFields, buildSaveArgs, checkFields, explainError,
+  savedResult, historyRow, isUmbcEmail, NON_UMBC_MESSAGE
 } from "./inspection-backend-core.mjs";
 
 const settings = window.STORMWATER_SUPABASE || {};
@@ -22,20 +23,39 @@ const client = settings.url && settings.publishableKey
   })
   : null;
 const NOT_CONFIGURED = "The back end is not set up on this page: load supabase-config.js before inspection-backend.mjs.";
+// Carries a reason to the sign-in page without putting it in the URL.
+const SIGN_IN_MESSAGE_KEY = "umbc-stormwater.signin.message";
 
 function pageUrl(page) {
   return new URL(page, location.href).href.split(/[?#]/)[0];
 }
 
-/** The signed-in user as { email }, or null. */
+/** The signed-in @umbc.edu user as { email }, or null. Any other account is
+ *  signed out on the spot, and the sign-in page shows why (takeSignInMessage). */
 export async function getUser() {
   if (!client) return null;
+  let email;
   try {
     const { data } = await client.auth.getSession();
-    const email = data.session?.user?.email;
-    return email ? { email } : null;
+    email = data.session?.user?.email;
   } catch {
     return null;
+  }
+  if (!email) return null;
+  if (isUmbcEmail(email)) return { email };
+  await signOut();
+  try { sessionStorage.setItem(SIGN_IN_MESSAGE_KEY, NON_UMBC_MESSAGE); } catch { /* Storage unavailable. */ }
+  return null;
+}
+
+/** The sign-in page calls this once: a reason left by another page, or "". */
+export function takeSignInMessage() {
+  try {
+    const message = sessionStorage.getItem(SIGN_IN_MESSAGE_KEY) || "";
+    sessionStorage.removeItem(SIGN_IN_MESSAGE_KEY);
+    return message;
+  } catch {
+    return "";
   }
 }
 
@@ -93,7 +113,7 @@ export function onUserChange(callback) {
   const { data } = client.auth.onAuthStateChange((_event, session) => {
     const email = session?.user?.email;
     // Deferred: awaiting another Supabase call inside this callback can deadlock supabase-js.
-    setTimeout(() => callback(email ? { email } : null), 0);
+    setTimeout(() => callback(isUmbcEmail(email) ? { email } : null), 0);
   });
   return () => data.subscription.unsubscribe();
 }
@@ -101,10 +121,11 @@ export function onUserChange(callback) {
 /** Start one inspection for the selected ArcGIS graphic. Call it again for each new
  *  inspection or newly selected BMP. Then call draft.save(form) from the Save button.
  *  Pressing Save again after "not confirmed" is the retry: it never makes a duplicate.
+ *  The snapshot saves every attribute plus the five form fields as shown at Save.
  */
 export function startInspection(graphic) {
   const ref = featureRef(graphic);
-  const snapshot = snapshotOf(graphic);
+  const attributes = attributesOf(graphic);
   const id = crypto.randomUUID();
   let inFlight = null;
   let confirmed = null;
@@ -140,7 +161,7 @@ export function startInspection(graphic) {
   return {
     id,
     feature: ref.ok ? { sourceItem: ref.sourceItem, layerId: ref.layerId, objectId: ref.objectId } : null,
-    /** input: the inspection <form>, or { inspectionType, outcome, notes }. */
+    /** input: the inspection <form>, or { inspectionType, outcome, notes } plus any form fields by input name. */
     save(input) {
       if (confirmed) {
         return Promise.resolve({ ...confirmed, alreadySaved: true,
@@ -149,7 +170,7 @@ export function startInspection(graphic) {
       if (inFlight) return inFlight;  // Double clicks send one request.
       if (!client) return Promise.resolve({ ok: false, kind: "not_configured", field: "", maybeSaved: false, message: NOT_CONFIGURED });
       if (!ref.ok) return Promise.resolve({ ok: false, kind: "unknown_source", field: "", maybeSaved: false, message: ref.message });
-      const args = buildSaveArgs(id, ref, readFields(input), snapshot);
+      const args = buildSaveArgs(id, ref, readFields(input), snapshotOf(attributes, readFormSection(input)));
       const problem = checkFields(args);
       if (problem) return Promise.resolve(problem);
       inFlight = send(args).finally(() => { inFlight = null; });
@@ -176,8 +197,11 @@ export async function myInspections(graphic, limit = 50) {
   }
 }
 
-/** Is the selected graphic one the database accepts? { ok, message } with no network call. */
+/** Is the selected graphic one the database accepts? { ok, message, key } with no network call.
+ *  key ("item|layer|objectId") is the BMP's identity: equal keys mean the same BMP. */
 export function checkFeature(graphic) {
   const ref = featureRef(graphic);
-  return ref.ok ? { ok: true, message: `BMP object ${ref.objectId} can be inspected.` } : { ok: false, message: ref.message };
+  return ref.ok
+    ? { ok: true, message: `BMP object ${ref.objectId} can be inspected.`, key: `${ref.sourceItem}|${ref.layerId}|${ref.objectId}` }
+    : { ok: false, message: ref.message, key: "" };
 }

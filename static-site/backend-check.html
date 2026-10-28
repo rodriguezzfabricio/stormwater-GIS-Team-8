@@ -30,7 +30,7 @@
 </head>
 <body>
   <main class="content-wrap check-page">
-    <div class="check-banner" role="note">Back-end check page — not the product UI</div>
+    <div class="check-banner" role="note">Back-end check page — not the product UI. Saving here creates a real inspection record on the real BMP with the object ID you type (layer UMBC_BMP_ArcGIS_Import), and it appears in your own history on the dashboard.</div>
 
     <section class="section-block" aria-labelledby="signin-title">
       <div class="section-heading"><div><h2 id="signin-title">1. Sign in</h2><p>Use your @umbc.edu Google account.</p></div></div>
@@ -45,10 +45,10 @@
     </section>
 
     <section class="section-block" aria-labelledby="save-title">
-      <div class="section-heading"><div><h2 id="save-title">2. Save a test inspection</h2><p>The page builds a fake BMP from the object ID you type.</p></div></div>
+      <div class="section-heading"><div><h2 id="save-title">2. Save a test inspection</h2><p>The page builds the BMP from the object ID you type, without the map. The record it saves is real.</p></div></div>
       <div class="form-shell check-box">
         <div class="form-grid">
-          <label>Object ID<input type="text" id="object-id" inputmode="numeric" value="42"></label>
+          <label>Object ID<input type="text" id="object-id" inputmode="numeric" value="1"></label>
           <label>Inspection type<select id="inspection-type"><option>Routine</option><option>Follow-up</option><option>Post-storm</option><option>Other</option></select></label>
           <div class="full-span radio-field" role="radiogroup" aria-labelledby="result-label">
             <span id="result-label">Inspection result</span>
@@ -84,7 +84,7 @@
     <section class="section-block" aria-labelledby="real-title">
       <div class="section-heading"><div><h2 id="real-title">4. Check the real map layer</h2></div></div>
       <div class="form-shell check-box">
-        <p>The BMP above is fake, so it always passes. To test the real map, call <code>checkFeature(graphic).message</code> on the BMP you clicked and show the message. If it says the item or layer is wrong, send Fabricio the message text. See BACKEND-GUIDE.md, Step 3.</p>
+        <p>The BMP above is built by hand, so it always passes this check. To test the real map, call <code>checkFeature(graphic).message</code> on the BMP you clicked and show the message. If it says the item or layer is wrong, send Fabricio the message text. See BACKEND-GUIDE.md, Step 3.</p>
       </div>
     </section>
   </main>
@@ -120,8 +120,8 @@
     function fakeGraphic() {
       const id = objectIdInput.value.trim();
       return {
-        layer: { title: "BMP_Database", portalItem: { id: "cc6a7a27c267435c8f7ed95a59eb5f24" }, layerId: 3, objectIdField: "OBJECTID_1" },
-        attributes: { OBJECTID_1: Number(id), Facility_N: "backend-check page" }
+        layer: { title: "UMBC_BMP_ArcGIS_Import", portalItem: { id: "5d70e438bb6045d6b3af05aee061e3cd" }, layerId: 0, objectIdField: "OBJECTID" },
+        attributes: { OBJECTID: Number(id), bmp_name: "backend-check page" }
       };
     }
 

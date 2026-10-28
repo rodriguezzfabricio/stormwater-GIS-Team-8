@@ -1,17 +1,27 @@
 /** Pure helpers behind inspection-backend.mjs. No DOM and no network, so
  *  test-inspection-backend.mjs can check every rule with plain Node.
- *  The rules mirror supabase/CONTRACT.md (Contract-Version 1).
+ *  The rules mirror supabase/CONTRACT.md (Contract-Version 2).
  */
 
-// The only BMP layer the database accepts. The URL is the same layer for
-// WebMaps that reference the service directly instead of through its item.
+// The only BMP layer the database accepts: UMBC_BMP_ArcGIS_Import, the layer
+// the WebMap shows. Identified by portal item and layer ID only.
 export const BMP_SOURCE = Object.freeze({
-  item: "cc6a7a27c267435c8f7ed95a59eb5f24",
-  layer: 3,
-  serviceUrl: "https://services1.arcgis.com/diQbEFavWah0WAHd/arcgis/rest/services/UMBC_SWM_Tracking_test/FeatureServer"
+  item: "5d70e438bb6045d6b3af05aee061e3cd",
+  layer: 0
 });
 const SNAPSHOT_LIMIT = 15000; // bytes; the database allows 16 KB and formats JSON slightly longer.
-const SNAPSHOT_FALLBACK_KEYS = ["Facility_T", "Facility_N", "MDE_SF_Num", "UMBC_PRF"];
+// If every attribute would not fit, keep only the fields that identify the BMP.
+const SNAPSHOT_FALLBACK_KEYS = ["bmp_name", "bmp_sequence", "ms4_bmp_id", "bmp_type"];
+// The editable form fields saved with each inspection, by input name.
+export const FORM_FIELDS = Object.freeze(["verified_campus_location", "nearby_address", "address_kind", "condition_status", "last_inspection"]);
+const FORM_VALUE_LIMIT = 500;
+
+export const NON_UMBC_MESSAGE = "Only @umbc.edu accounts can use this app.";
+
+/** True only for an address ending in @umbc.edu (any letter case). */
+export function isUmbcEmail(email) {
+  return typeof email === "string" && /^[^@\s]+@umbc\.edu$/i.test(email.trim());
+}
 
 /** Which BMP a selected ArcGIS graphic is, in the form the database wants. */
 export function featureRef(graphic) {
@@ -22,11 +32,7 @@ export function featureRef(graphic) {
   const url = String(layer.url || "").replace(/\/+$/, "");
   const urlLayer = url.match(/\/(\d+)$/)?.[1];
   const layerId = Number.isInteger(layer.layerId) ? layer.layerId : urlLayer !== undefined ? Number(urlLayer) : NaN;
-  const serviceUrl = url.replace(/\/\d+$/, "").toLowerCase();
-  // Same service URL means the same features, whichever portal item the WebMap used.
-  const sourceItem = serviceUrl === BMP_SOURCE.serviceUrl.toLowerCase()
-    ? BMP_SOURCE.item
-    : String(layer.portalItem?.id || layer.parent?.portalItem?.id || "");
+  const sourceItem = String(layer.portalItem?.id || layer.parent?.portalItem?.id || "");
   if (sourceItem !== BMP_SOURCE.item || layerId !== BMP_SOURCE.layer) {
     return {
       ok: false,
@@ -42,16 +48,33 @@ export function featureRef(graphic) {
   return { ok: true, sourceItem, layerId, objectId: String(objectId) };
 }
 
-/** The attributes shown on screen, JSON-safe and small enough for the database. */
-export function snapshotOf(graphic) {
-  const snapshot = {};
+/** The feature's attributes, JSON-safe. Taken when the inspection starts. */
+export function attributesOf(graphic) {
+  const attributes = {};
   for (const [name, value] of Object.entries(graphic?.attributes || {})) {
-    if (value === undefined || (typeof value === "number" && !Number.isFinite(value))) snapshot[name] = null;
-    else if (value !== null && typeof value === "object") snapshot[name] = String(value);
-    else snapshot[name] = value;
+    if (value === undefined || (typeof value === "number" && !Number.isFinite(value))) attributes[name] = null;
+    else if (value !== null && typeof value === "object") attributes[name] = String(value);
+    else attributes[name] = value;
   }
+  return attributes;
+}
+
+/** The five editable form fields as shown at Save, each cut to 500 characters.
+ *  Accepts the inspection <form> itself, or a plain object keyed by input name. */
+export function readFormSection(input) {
+  const named = typeof input?.elements?.namedItem === "function";
+  return Object.fromEntries(FORM_FIELDS.map(name => {
+    const value = named ? input.elements.namedItem(name)?.value : input?.[name];
+    return [name, String(value ?? "").trim().slice(0, FORM_VALUE_LIMIT)];
+  }));
+}
+
+/** { arcgis, form }, small enough for the database. */
+export function snapshotOf(attributes, form = {}) {
+  const snapshot = { arcgis: attributes || {}, form };
   if (new TextEncoder().encode(JSON.stringify(snapshot)).length <= SNAPSHOT_LIMIT) return snapshot;
-  return Object.fromEntries(SNAPSHOT_FALLBACK_KEYS.map(name => [name, snapshot[name] ?? null]));
+  const arcgis = Object.fromEntries(SNAPSHOT_FALLBACK_KEYS.map(name => [name, snapshot.arcgis[name] ?? null]));
+  return { arcgis, form };
 }
 
 /** Accepts the inspection <form> itself, or { inspectionType, outcome, notes }. */
@@ -115,11 +138,11 @@ export function explainError(error, status = 0, action = "save") {
   if (text.startsWith("draft_conflict")) {
     return result("draft_conflict", "This inspection was already saved with different values. Start a new inspection to record changes.");
   }
-  if (code === "PGRST301" || code === "PGRST303" || text.startsWith("JWT expired")) {
-    return result("signed_out", "Your sign-in expired. Sign in again; what you typed is kept.");
-  }
-  if (text.startsWith("not_authenticated") || (code === "42501" && text.startsWith("permission denied"))) {
-    return result("signed_out", "You are signed out. Sign in again; what you typed is kept.");
+  if (code === "PGRST301" || code === "PGRST303" || text.startsWith("JWT expired") ||
+      text.startsWith("not_authenticated") || (code === "42501" && text.startsWith("permission denied"))) {
+    return result("signed_out", action === "load"
+      ? "You are signed out. Sign in again in a new tab, then select the BMP again."
+      : "You are signed out. Sign in again in a new tab, then press Save again here.");
   }
   if (action === "load") {
     return result("network", "Could not load past inspections. Check your connection and try again.");
@@ -139,13 +162,19 @@ export function savedResult(row, alreadySaved = false) {
   };
 }
 
+/** One history row. form is the saved form section ({ inputName: text }), or null when the record has none. */
 export function historyRow(row) {
+  const saved = row.displayed_snapshot?.form;
+  const form = saved && typeof saved === "object" && !Array.isArray(saved)
+    ? Object.fromEntries(FORM_FIELDS.filter(name => name in saved).map(name => [name, String(saved[name] ?? "")]))
+    : null;
   return {
     recordId: row.id,
     savedAt: row.submitted_at,
     savedAtText: new Date(row.submitted_at).toLocaleString(),
     inspectionType: row.inspection_type,
     outcome: row.outcome,
-    notes: row.notes ?? ""
+    notes: row.notes ?? "",
+    form
   };
 }
