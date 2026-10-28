@@ -20,6 +20,26 @@ let addressRequest = 0;
 const nearbyAddress = byId("facility-nearby-address");
 const nearbyNote = byId("facility-nearby-note");
 
+// Saving and history go through the Supabase drop-in, which map.js loads and
+// passes in (connectInspectionBackend). This file never talks to Supabase itself.
+const saveButton = byId("save-inspection");
+const clearButton = byId("clear-inspection");
+const saveStatus = byId("save-status");
+const historyStatus = byId("history-status");
+const historyList = byId("history-list");
+// Everything the inspector types that a save stores. Locked while a save is in
+// flight, and after a save that was not confirmed, so a retry sends the same values.
+const SAVED_FIELDS = ["inspection_type", "inspection_result", "observations",
+  "verified_campus_location", "nearby_address", "address_kind", "condition_status", "last_inspection"];
+const FORM_SECTION_FIELDS = SAVED_FIELDS.slice(3);
+let backend = null;
+let selectedGraphic = null;
+let draft = null;          // One inspection of the selected BMP: backend.startInspection().
+let saving = false;        // A save request is in flight.
+let unconfirmed = false;   // The last save got no reply; it may already be stored.
+let catalogAvailable = false;
+let historyRequest = 0;
+
 function renderAddress(value, note) {
   nearbyAddress.textContent = value;
   nearbyNote.textContent = note;
@@ -98,7 +118,11 @@ const editStatus = byId("inspection-edit-status");
 const restoreButton = byId("restore-arcgis-fields");
 let formFacilityKey = "";
 
-function facilityKey(facility) {
+/** Equal keys mean the same BMP. For BMPs the database accepts this is the
+ *  drop-in's own identity (item|layer|object ID), so the form and the draft agree. */
+function facilityKey(facility, graphic) {
+  const accepted = backend?.checkFeature(graphic);
+  if (accepted?.ok) return accepted.key;
   const attrs = facility.rawAttributes || {};
   const objectId = Object.entries(attrs).find(([key]) => /^(?:objectid|fid)$/i.test(key))?.[1];
   return [facility.source, objectId ?? facility.facilityReference ?? "", facility.facilityName,
@@ -113,7 +137,7 @@ function refreshEditStatus() {
     : count
       ? `${count} editable field${count === 1 ? "" : "s"} changed for this inspection. Locked ArcGIS fields remain unchanged.`
       : "Core facility fields are locked to ArcGIS values. Other inspection fields can be edited. Selecting another BMP starts a new draft.";
-  restoreButton.disabled = !selectedFacility || count === 0;
+  restoreButton.disabled = !selectedFacility || count === 0 || saving || unconfirmed;
 }
 
 function markInspectionField(name) {
@@ -156,6 +180,8 @@ function populateInspection(facility, {preserveEdits = true} = {}) {
   for (const [name, property] of Object.entries(INSPECTION_FIELD_MAP)) {
     const input = form.elements.namedItem(name);
     if (!input) continue;
+    // A save in flight or not confirmed keeps the values it sent, even when a late address lookup arrives.
+    if (!input.readOnly && (saving || unconfirmed)) continue;
     const original = facility[property] == null ? "" : String(facility[property]);
     originalFormValues.set(name, original);
     if (input.readOnly || !preserveEdits || !editedFormFields.has(name)) input.value = original;
@@ -181,19 +207,27 @@ function populateInspection(facility, {preserveEdits = true} = {}) {
   byId("inspection-selected-caption").classList.add("connected");
   refreshEditStatus();
 }
-function showFacility(facility) {
+function showFacility(facility, graphic) {
   const request = ++addressRequest;
-  const sameDrain = formFacilityKey && formFacilityKey === facilityKey(facility);
+  const key = facilityKey(facility, graphic);
+  const sameDrain = formFacilityKey && formFacilityKey === key;
   if (!sameDrain) {
     // Inspection observations are specific to one drain, not portable to another.
-    for (const name of ["verified_campus_location", "inspection_type", "inspection_result", "observations", "photos"]) {
+    // A different BMP also ends an unconfirmed save's lock and starts a new draft.
+    unconfirmed = false;
+    draft = null;
+    for (const name of ["verified_campus_location", "inspection_type", "inspection_result", "observations"]) {
       const input = form.elements.namedItem(name);
       if (input) input.value = "";
     }
     clearEditMarkers();
+    showSaveStatus("");
   }
-  formFacilityKey = facilityKey(facility);
+  formFacilityKey = key;
   selectedFacility = facility;
+  selectedGraphic = graphic;
+  if (!draft) startDraft();  // The same BMP again keeps its draft.
+  applyLock();
   const displayName = facility.facilityName || facility.assetTag || "Selected BMP facility";
   selectedName.textContent = displayName;
   selectedIndicator.hidden = false;
@@ -223,9 +257,153 @@ function showFacility(facility) {
   selectionMessage.textContent = facility.entries.length
     ? `Selected ${displayName} from ${facility.source}. ${facility.entries.length} source attribute${facility.entries.length === 1 ? "" : "s"} returned (missing values labelled).`
     : "Selected an ArcGIS feature with no returned attributes.";
+  const accepted = backend?.checkFeature(graphic);
+  if (accepted && !accepted.ok) selectionMessage.textContent = `Selected ${displayName}. ${accepted.message}`;
   startButton.disabled = false;
   void updateReadableLocation(facility, request);
+  void loadHistory();
 }
+
+function startDraft() {
+  draft = backend && selectedGraphic ? backend.startInspection(selectedGraphic) : null;
+}
+
+function applyLock() {
+  const locked = saving || unconfirmed;
+  for (const name of SAVED_FIELDS) {
+    const input = form.elements.namedItem(name);
+    if (input) input.disabled = locked;
+  }
+  clearButton.disabled = locked;
+  saveButton.disabled = saving;
+  drainSelect.disabled = saving || !catalogAvailable;
+  refreshEditStatus();
+}
+
+/** Messages come from the drop-in and are shown with textContent only. */
+function showSaveStatus(message, tone = "", signInLink = false) {
+  saveStatus.replaceChildren(message);
+  if (tone) saveStatus.dataset.tone = tone;
+  else delete saveStatus.dataset.tone;
+  if (signInLink) {
+    const link = document.createElement("a");
+    link.href = "login.html";
+    link.target = "_blank";
+    link.rel = "noopener";
+    link.textContent = "Open sign-in in a new tab";
+    saveStatus.append(" ", link);
+  }
+}
+
+async function saveInspection() {
+  if (saving) return;
+  if (!backend) {
+    showSaveStatus("Sign-in could not load. Check your connection and reload.", "error");
+    return;
+  }
+  if (!draft) {
+    showSaveStatus(backend.checkFeature(null).message, "error");
+    return;
+  }
+  const current = draft;
+  const pending = current.save(form);  // Reads the form now; the drop-in sends at most one request.
+  saving = true;
+  selectionCounter += 1;  // Pending map clicks are dropped while saving.
+  applyLock();
+  showSaveStatus("Saving…");
+  const result = await pending;
+  saving = false;
+  if (result.ok) {
+    // Confirmed (new, already saved, or an earlier attempt that did arrive): next inspection, same BMP.
+    unconfirmed = false;
+    for (const name of ["inspection_type", "inspection_result", "observations"]) form.elements.namedItem(name).value = "";
+    startDraft();
+    applyLock();
+    showSaveStatus(result.message, "ok");
+    void loadHistory();
+    return;
+  }
+  if (result.maybeSaved) unconfirmed = true;  // Same draft: pressing Save again cannot duplicate.
+  applyLock();
+  showSaveStatus(result.message, "error", result.kind === "signed_out");
+}
+
+function fieldLabel(name) {
+  const label = form.elements.namedItem(name)?.closest("label");
+  return label?.firstChild?.textContent?.trim() || name;
+}
+
+function detailRow(list, label, value) {
+  const term = document.createElement("dt");
+  const detail = document.createElement("dd");
+  term.textContent = label;
+  detail.textContent = value;
+  list.append(term, detail);
+}
+
+function historyItem(row) {
+  const item = document.createElement("li");
+  const details = document.createElement("details");
+  const summary = document.createElement("summary");
+  summary.textContent = `${row.savedAtText} · ${row.inspectionType} · ${row.outcome === "pass" ? "Pass" : "Fail"}`;
+  const body = document.createElement("div");
+  body.className = "history-detail";
+  const list = document.createElement("dl");
+  detailRow(list, fieldLabel("observations"), row.notes || "No notes");
+  if (row.form) {
+    for (const name of FORM_SECTION_FIELDS) {
+      if (name in row.form) detailRow(list, fieldLabel(name), row.form[name] || "Not entered");
+    }
+  }
+  body.append(list);
+  if (!row.form) {
+    const none = document.createElement("p");
+    none.textContent = "No extra fields saved";
+    body.append(none);
+  }
+  details.append(summary, body);
+  item.append(details);
+  return item;
+}
+
+function showHistoryStatus(message, tone = "") {
+  historyStatus.textContent = message;
+  if (tone) historyStatus.dataset.tone = tone;
+  else delete historyStatus.dataset.tone;
+}
+
+/** The signed-in inspector's own inspections of the selected BMP. Only the newest request is shown. */
+async function loadHistory() {
+  const request = ++historyRequest;
+  historyList.replaceChildren();
+  if (!selectedGraphic) {
+    showHistoryStatus("Select a BMP to see your past inspections.");
+    return;
+  }
+  if (!backend) {
+    showHistoryStatus("Sign-in could not load. Check your connection and reload.", "error");
+    return;
+  }
+  const accepted = backend.checkFeature(selectedGraphic);
+  if (!accepted.ok) {
+    showHistoryStatus(accepted.message, "error");  // No request for a BMP the database refuses.
+    return;
+  }
+  showHistoryStatus("Loading…");
+  const found = await backend.myInspections(selectedGraphic, 50);
+  if (request !== historyRequest) return;  // A newer selection or save replaced this one.
+  historyList.replaceChildren(...found.rows.map(historyItem));
+  if (!found.ok) showHistoryStatus(found.message, "error");
+  else showHistoryStatus(found.rows.length
+    ? `${found.rows.length} inspection${found.rows.length === 1 ? "" : "s"}, newest first. Open one to see what was saved.`
+    : found.message);
+}
+
+/** map.js calls this once the drop-in has loaded. */
+export function connectInspectionBackend(dropIn) {
+  backend = dropIn;
+}
+saveButton.addEventListener("click", saveInspection);
 
 /** Both the dropdown and the map click use exactly the same facility renderer. */
 export function connectBmpSelection(mapElement, options = {}) {
@@ -252,7 +430,8 @@ export function connectBmpSelection(mapElement, options = {}) {
         catalogByKey.set(key, drains.find(item => item.key === key));
         drainSelect.add(new Option(label, key));
       });
-      drainSelect.disabled = drains.length === 0;
+      catalogAvailable = drains.length > 0;
+      drainSelect.disabled = saving || !catalogAvailable;
       if (lastClickedFeature) {
         drainSelect.value = findMatchingDrain(drains, lastClickedFeature)?.key || "";
       }
@@ -263,6 +442,7 @@ export function connectBmpSelection(mapElement, options = {}) {
     } catch {
       if (disposed) return;
       drainSelect.replaceChildren(new Option("BMP list unavailable", ""));
+      catalogAvailable = false;
       drainSelect.disabled = true;
       selectionMessage.textContent = "Unable to load the BMP list from ArcGIS. Map-marker selection is still available.";
     }
@@ -271,13 +451,13 @@ export function connectBmpSelection(mapElement, options = {}) {
   /** Selection from the dropdown centers and highlights the ORIGINAL map feature. */
   async function selectFromDropdown() {
     const key = drainSelect.value;
-    if (!key) return;
+    if (!key || saving) return;
     const entry = catalogByKey.get(key);
     if (!entry) return;
     const request = ++selectionCounter;
     const feature = entry.graphic;
     try {
-      showFacility(extractFacility(feature));
+      showFacility(extractFacility(feature), feature);
       await highlighter.select(feature);
       if (request !== selectionCounter || disposed) return;
       const target = feature.geometry;
@@ -299,6 +479,7 @@ export function connectBmpSelection(mapElement, options = {}) {
   void initializeDrainDropdown();
 
   async function handleClick(event) {
+    if (saving) return;  // The selection stays put until the save finishes.
     const request = ++selectionCounter;
     selectionMessage.textContent = "Reading the selected ArcGIS feature…";
     try {
@@ -351,7 +532,7 @@ export function connectBmpSelection(mapElement, options = {}) {
       }
       if (request !== selectionCounter) return;
       lastClickedFeature = match;
-      showFacility(extractFacility(match, event.detail.mapPoint));
+      showFacility(extractFacility(match, event.detail.mapPoint), match);
       // Keep the named-drain selector in sync when the user clicks a map marker.
       const matching = findMatchingDrain(catalog, match);
       drainSelect.value = matching?.key || "";
@@ -365,16 +546,16 @@ export function connectBmpSelection(mapElement, options = {}) {
     }
   }
 
-  // Frontend preview must never submit data to a server.
+  // Only "Save inspection" saves; a native submit (Enter) does nothing.
   form.addEventListener("submit", event => event.preventDefault());
   // Clearing observations should never silently erase the selected asset identity.
   form.addEventListener("reset", event => {
     event.preventDefault();
+    if (saving || unconfirmed) return;  // The button is disabled then too.
     form.elements.namedItem("inspection_type").value = "";
     form.elements.namedItem("inspection_result").value = "";
     form.elements.namedItem("observations").value = "";
     form.elements.namedItem("verified_campus_location").value = "";
-    form.elements.namedItem("photos").value = "";
     if (selectedFacility) populateInspection(selectedFacility, {preserveEdits: false});
   });
   startButton.addEventListener("click", () => {
