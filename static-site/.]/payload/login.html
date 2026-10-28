@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UMBC Stormwater GIS - Sign in</title>
+    <link rel="stylesheet" href="login.css">
+</head>
+<body>
+    <main class="login-page">
+        <section class="login-card" aria-labelledby="sign-in-heading">
+            <div class="login-header">
+                <div class="logo-box">
+                    <img src="assets/stormwater-logo.png" alt="UMBC Stormwater GIS logo" width="52" height="52">
+                </div>
+                <div>
+                    <h1>UMBC</h1>
+                    <p>STORMWATER GIS</p>
+                </div>
+            </div>
+            <div class="login-content">
+                <h2 id="sign-in-heading">Sign in</h2>
+                <p class="subtitle">Sign in once using the UMBC ArcGIS account authorized to access the campus stormwater map.</p>
+                <button id="login-with-arcgis" type="button">Continue with UMBC / ArcGIS</button>
+                <p class="login-help">You'll sign in on the secure ArcGIS/UMBC page, then return to the stormwater dashboard. Never enter your UMBC password into this website.</p>
+                <p id="login-error" role="alert" aria-live="polite"></p>
+            </div>
+        </section>
+    </main>
+    <script src="login.js" defer></script>
+</body>
+</html>

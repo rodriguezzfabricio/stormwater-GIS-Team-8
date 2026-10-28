@@ -1,0 +1,26 @@
+# UMBC Stormwater – Sidebar Logo Update
+
+Replaces the small yellow droplet block in the left sidebar with your supplied
+blue stormwater-drop-and-ripples artwork. Keeps the UMBC / STORMWATER GIS text.
+Does **not** overwrite ArcGIS configuration, fullscreen CSS, map logic, or form fields.
+
+## Install from WSL Kali
+
+```bash
+cd ~/stormwater/stormwater-GIS-Team-8/static-site
+unzip -o /mnt/c/Users/taivu/Downloads/umbc-stormwater-sidebar-logo-patch.zip -d .
+python3 apply-stormwater-logo.py
+```
+
+Then hard-refresh `http://localhost:5500/` with Ctrl+Shift+R.
+
+## Git commit after checking
+
+```bash
+git add index.html brand-logo.css assets/stormwater-logo.png
+git commit -m "Replace sidebar icon with stormwater project logo"
+git push
+```
+
+Leave `index.html.before-logo` and `apply-stormwater-logo.py` untracked or remove them
+from your working directory after testing. They are not needed at runtime.
