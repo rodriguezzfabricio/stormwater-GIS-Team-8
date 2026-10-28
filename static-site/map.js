@@ -11,6 +11,34 @@ const help = document.getElementById("map-status-help");
 const signInButton = document.getElementById("arcgis-sign-in");
 const accessDescription = document.getElementById("map-access-description");
 
+// STORMWATER AUTH-FIRST GATE: require ArcGIS credentials before showing dashboard.
+const authGate = document.getElementById("stormwater-auth-gate");
+const authGateTitle = document.getElementById("stormwater-auth-title");
+const authGateMessage = document.getElementById("stormwater-auth-message");
+const LOGIN_INTENT_KEY = "umbc-stormwater.arcgis.signin";
+
+function setAuthGate(heading, message) {
+  authGateTitle.textContent = heading;
+  authGateMessage.textContent = message;
+}
+function failAuthGate(message) {
+  authGate.classList.add("auth-failed");
+  setAuthGate("Sign-in could not be completed", message);
+}
+function verifiedArcgisSession() {
+  // Call only after checkSignInStatus(sharingUrl) resolves successfully.
+  document.documentElement.classList.add("arcgis-authenticated");
+  authGate.hidden = true;
+}
+function hasLoginIntent() {
+  try { return sessionStorage.getItem(LOGIN_INTENT_KEY) === "1"; }
+  catch { return false; }
+}
+function clearLoginIntent() {
+  try { sessionStorage.removeItem(LOGIN_INTENT_KEY); } catch { /* Storage unavailable. */ }
+}
+
+
 function showStatus(heading, message, hint = "You can expand this map within the website using the Full map control.") {
   title.textContent = heading;
   description.textContent = message;
@@ -21,6 +49,7 @@ function showStatus(heading, message, hint = "You can expand this map within the
 async function start() {
   const clientId = String(settings.arcgisClientId || "").trim();
   if (!clientId) {
+    failAuthGate("ArcGIS OAuth Client ID missing. Check arcgis-config.js.");
     showStatus(
       "One-time ArcGIS setup required",
       "The map is restricted to authorized users. Ask your UMBC ArcGIS administrator for an OAuth application Client ID, then add it to arcgis-config.js.",
@@ -76,29 +105,34 @@ async function start() {
       }
     }
 
-    signInButton.addEventListener("click", async () => {
-      signInButton.disabled = true;
-      showStatus("Opening UMBC sign-in", "You will be redirected to ArcGIS to authenticate, then returned to this page.");
-      try {
-        await identityManager.getCredential(sharingUrl);
-        await showMap();
-      } catch {
-        showStatus("Sign-in was not completed", "Check that your OAuth Client ID and registered redirect URL match this local site.");
-        signInButton.hidden = false;
-      } finally {
-        signInButton.disabled = false;
-      }
-    });
-
+    // The login page stores a one-time sign-in intent, not a password.
+    const requestedByLoginPage = hasLoginIntent();
+    setAuthGate("Verifying your ArcGIS session", "Checking your authorized UMBC / ArcGIS account…");
     try {
       await identityManager.checkSignInStatus(sharingUrl);
-      await showMap();
     } catch {
-      showStatus("Sign in to load the UMBC map", "Use the registered ArcGIS organizational sign-in. This login occurs in the full browser tab, not inside a third-party iframe.");
-      signInButton.hidden = false;
-      accessDescription.textContent = "Authorized sign-in is available; choose Sign in to load the secured WebMap.";
+      if (!requestedByLoginPage) {
+        // Direct navigation without a valid session returns to the login page.
+        window.location.replace(new URL("./login.html", window.location.href).href);
+        return;
+      }
+      clearLoginIntent();
+      setAuthGate("Opening secure UMBC sign-in", "Authenticate with ArcGIS, then return to the website.");
+      try {
+        // OAuthInfo already specifies popup:false; the SDK manages this redirect.
+        await identityManager.getCredential(sharingUrl);
+        // A successful redirect alone is insufficient: verify the ArcGIS credential.
+        await identityManager.checkSignInStatus(sharingUrl);
+      } catch {
+        failAuthGate("ArcGIS sign-in was canceled or failed. Return to login and try again.");
+        return;
+      }
     }
+    clearLoginIntent();
+    verifiedArcgisSession();
+    await showMap();
   } catch {
+    failAuthGate("ArcGIS could not initialize. Check your internet connection and retry.");
     showStatus("Could not initialize ArcGIS", "Verify your internet connection and that the ArcGIS SDK CDN can load. Check the ArcGIS connection or sign-in settings and reload this page.");
   }
 }

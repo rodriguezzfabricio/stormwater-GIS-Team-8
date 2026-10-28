@@ -14,8 +14,38 @@
   <script type="module" src="map.js"></script>
   <script type="module" src="map-fullscreen.js"></script>
   <link rel="stylesheet" href="brand-logo.css">
+<style id="stormwater-auth-gate-style">
+  /* Load before app scripts. Keep dashboard invisible until verified. */
+  html:not(.arcgis-authenticated) body > :not(#stormwater-auth-gate) { display: none !important; }
+  #stormwater-auth-gate[hidden] { display: none !important; }
+  #stormwater-auth-gate { min-height: 100vh; display: flex; flex-direction: column;
+    justify-content: center; align-items: center; gap: 14px; text-align: center;
+    padding: 28px; background: #f3f6fb; color: #142b48;
+    font-family: Arial, Helvetica, sans-serif; }
+  #stormwater-auth-gate .auth-badge { width: 62px; height: 62px; border-radius: 18px;
+    background: #e4effb; display: grid; place-items: center; overflow: hidden; }
+  #stormwater-auth-gate .auth-badge img { width: 52px; height: 52px; object-fit: contain; }
+  #stormwater-auth-gate .auth-spinner { width: 26px; height: 26px;
+    border: 3px solid #cad6e3; border-top-color: #2678bc; border-radius: 50%;
+    animation: stormwater-spin .85s linear infinite; }
+  #stormwater-auth-gate.auth-failed .auth-spinner { display: none; }
+  #stormwater-auth-gate h1 { margin: 0; font-size: 23px; }
+  #stormwater-auth-gate p { margin: 0; max-width: 440px; line-height: 1.55; color: #5c7186; }
+  #stormwater-auth-gate a { margin-top: 14px; font-size: 14px; font-weight: 700; color: #1764a3; }
+  @keyframes stormwater-spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { #stormwater-auth-gate .auth-spinner { animation: none; } }
+</style>
 </head>
 <body>
+  <!-- ArcGIS authentication gate: only shown while the dashboard is locked. -->
+  <div id="stormwater-auth-gate" role="status" aria-live="polite">
+    <div class="auth-badge"><img src="assets/stormwater-logo.png" alt="" aria-hidden="true"></div>
+    <div class="auth-spinner" aria-hidden="true"></div>
+    <h1 id="stormwater-auth-title">Verifying your ArcGIS session</h1>
+    <p id="stormwater-auth-message">Your campus dashboard will appear after UMBC / ArcGIS authentication completes.</p>
+    <a href="login.html">Back to sign-in</a>
+  </div>
+
   <!-- Icons are inline so the starter website has no icon library or framework dependency. -->
   <svg xmlns="http://www.w3.org/2000/svg" class="svg-sprite" aria-hidden="true" focusable="false">
     <symbol id="i-drop" viewBox="0 0 24 24"><path d="M12 2.5c-2.5 4-7 9.2-7 13.1A7 7 0 0 0 19 15.6C19 11.7 14.5 6.5 12 2.5Z"/><path d="M9 16a3 3 0 0 0 3 3"/></symbol>
