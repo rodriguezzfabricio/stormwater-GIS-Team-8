@@ -6,8 +6,13 @@
 -- every case passed. Run through the Supabase MCP (execute_sql) or psql as
 -- postgres. Compare row counts in assets, inspections and auth.users before
 -- and after the run; they must match.
+--
+-- Real inspections exist, so row counts are checked against a baseline taken
+-- at the start of this transaction. Repeatable read keeps that baseline exact
+-- even if someone saves during the run. Test features use object IDs
+-- 900001-900009, outside the BMP layer's range.
 
-begin;
+begin isolation level repeatable read;
 
 -- Helpers live in a throwaway schema that the rollback removes.
 create schema tests;
@@ -15,6 +20,11 @@ grant usage on schema tests to anon, authenticated;
 
 create table tests.results (k text primary key, v jsonb);
 grant all on table tests.results to anon, authenticated;
+
+-- Baseline row counts, as owner, before any test writes.
+insert into tests.results values ('baseline', jsonb_build_object(
+  'inspections', (select count(*) from public.inspections),
+  'assets', (select count(*) from public.assets)));
 
 create function tests.act_as(p_uid uuid, p_email text) returns void
 language plpgsql as $$
@@ -59,21 +69,21 @@ values
 -- Case 1: signed out cannot run either function or read either table.
 select tests.act_as_anon();
 select tests.expect_error('1 anon create_inspection',
-  $q$select * from public.create_inspection('d0000000-0000-4000-8000-000000000099', 'cc6a7a27c267435c8f7ed95a59eb5f24', 3, '101', 'Routine', 'pass')$q$,
+  $q$select * from public.create_inspection('d0000000-0000-4000-8000-000000000099', '5d70e438bb6045d6b3af05aee061e3cd', 0, '900001', 'Routine', 'pass')$q$,
   '42501');
 select tests.expect_error('1 anon my_inspections',
-  $q$select * from public.my_inspections('cc6a7a27c267435c8f7ed95a59eb5f24', 3, '101')$q$, '42501');
+  $q$select * from public.my_inspections('5d70e438bb6045d6b3af05aee061e3cd', 0, '900001')$q$, '42501');
 select tests.expect_error('1 anon select inspections', 'select * from public.inspections', '42501');
 select tests.expect_error('1 anon select assets', 'select * from public.assets', '42501');
 reset role;
 
--- Case 4: A saves on feature 101; server sets inspector and time.
+-- Case 4: A saves on feature 900001; server sets inspector and time.
 select tests.act_as('00000000-0000-4000-a000-00000000000a', 'test-a@umbc.edu');
 do $$
 declare r record;
 begin
   select * into strict r from public.create_inspection(
-    'd0000000-0000-4000-8000-000000000001', 'cc6a7a27c267435c8f7ed95a59eb5f24', 3, ' 101 ',
+    'd0000000-0000-4000-8000-000000000001', '5d70e438bb6045d6b3af05aee061e3cd', 0, ' 900001 ',
     '  Routine ', ' PASS ', '  first note  ', '{"Facility_N": "Test pond"}');
   if r.replayed is distinct from false then raise exception 'TEST FAILED: 4 replayed should be false'; end if;
   if r.id <> 'd0000000-0000-4000-8000-000000000001' then raise exception 'TEST FAILED: 4 wrong id'; end if;
@@ -90,66 +100,76 @@ declare r record; first jsonb;
 begin
   select v into first from tests.results where k = 'case4';
   select * into strict r from public.create_inspection(
-    'd0000000-0000-4000-8000-000000000001', 'cc6a7a27c267435c8f7ed95a59eb5f24', 3, ' 101 ',
+    'd0000000-0000-4000-8000-000000000001', '5d70e438bb6045d6b3af05aee061e3cd', 0, ' 900001 ',
     '  Routine ', ' PASS ', '  first note  ', '{"Facility_N": "Test pond"}');
   if r.replayed is distinct from true then raise exception 'TEST FAILED: 5 replayed should be true'; end if;
   if to_jsonb(r) - 'replayed' <> first - 'replayed' then raise exception 'TEST FAILED: 5 replay returned different row'; end if;
 
   -- A different snapshot is not compared on replay (Alternative G).
   select * into strict r from public.create_inspection(
-    'd0000000-0000-4000-8000-000000000001', 'cc6a7a27c267435c8f7ed95a59eb5f24', 3, '101',
+    'd0000000-0000-4000-8000-000000000001', '5d70e438bb6045d6b3af05aee061e3cd', 0, '900001',
     'Routine', 'pass', 'first note', '{"Facility_N": "Test pond", "extra": 1}');
   if r.replayed is distinct from true then raise exception 'TEST FAILED: 5 snapshot change should still replay'; end if;
 end $$;
 
 -- Case 6: A reuses the draft ID with a different outcome.
 select tests.expect_error('6 draft reuse different outcome',
-  $q$select * from public.create_inspection('d0000000-0000-4000-8000-000000000001', 'cc6a7a27c267435c8f7ed95a59eb5f24', 3, '101', 'Routine', 'fail', 'first note')$q$,
+  $q$select * from public.create_inspection('d0000000-0000-4000-8000-000000000001', '5d70e438bb6045d6b3af05aee061e3cd', 0, '900001', 'Routine', 'fail', 'first note')$q$,
   '23505', 'draft_conflict');
 select tests.expect_error('6 draft reuse different feature',
-  $q$select * from public.create_inspection('d0000000-0000-4000-8000-000000000001', 'cc6a7a27c267435c8f7ed95a59eb5f24', 3, '102', 'Routine', 'pass', 'first note')$q$,
+  $q$select * from public.create_inspection('d0000000-0000-4000-8000-000000000001', '5d70e438bb6045d6b3af05aee061e3cd', 0, '900002', 'Routine', 'pass', 'first note')$q$,
   '23505', 'draft_conflict');
 select tests.expect_error('6 draft reuse notes removed',
-  $q$select * from public.create_inspection('d0000000-0000-4000-8000-000000000001', 'cc6a7a27c267435c8f7ed95a59eb5f24', 3, '101', 'Routine', 'pass')$q$,
+  $q$select * from public.create_inspection('d0000000-0000-4000-8000-000000000001', '5d70e438bb6045d6b3af05aee061e3cd', 0, '900001', 'Routine', 'pass')$q$,
   '23505', 'draft_conflict');
 
 -- Case 10: invalid input names the field (A is a valid caller).
 select tests.expect_error('10 outcome needs verification',
-  $q$select * from public.create_inspection('d0000000-0000-4000-8000-000000000010', 'cc6a7a27c267435c8f7ed95a59eb5f24', 3, '101', 'Routine', 'needs verification')$q$,
+  $q$select * from public.create_inspection('d0000000-0000-4000-8000-000000000010', '5d70e438bb6045d6b3af05aee061e3cd', 0, '900001', 'Routine', 'needs verification')$q$,
   'P0001', 'invalid_input:outcome');
 select tests.expect_error('10 empty type',
-  $q$select * from public.create_inspection('d0000000-0000-4000-8000-000000000010', 'cc6a7a27c267435c8f7ed95a59eb5f24', 3, '101', '', 'pass')$q$,
+  $q$select * from public.create_inspection('d0000000-0000-4000-8000-000000000010', '5d70e438bb6045d6b3af05aee061e3cd', 0, '900001', '', 'pass')$q$,
   'P0001', 'invalid_input:inspection_type');
 select tests.expect_error('10 whitespace type',
-  $q$select * from public.create_inspection('d0000000-0000-4000-8000-000000000010', 'cc6a7a27c267435c8f7ed95a59eb5f24', 3, '101', E' \n ', 'pass')$q$,
+  $q$select * from public.create_inspection('d0000000-0000-4000-8000-000000000010', '5d70e438bb6045d6b3af05aee061e3cd', 0, '900001', E' \n ', 'pass')$q$,
   'P0001', 'invalid_input:inspection_type');
 select tests.expect_error('10 121-char type',
-  format($q$select * from public.create_inspection('d0000000-0000-4000-8000-000000000010', 'cc6a7a27c267435c8f7ed95a59eb5f24', 3, '101', %L, 'pass')$q$, repeat('x', 121)),
+  format($q$select * from public.create_inspection('d0000000-0000-4000-8000-000000000010', '5d70e438bb6045d6b3af05aee061e3cd', 0, '900001', %L, 'pass')$q$, repeat('x', 121)),
   'P0001', 'invalid_input:inspection_type');
 select tests.expect_error('10 4001-char notes',
-  format($q$select * from public.create_inspection('d0000000-0000-4000-8000-000000000010', 'cc6a7a27c267435c8f7ed95a59eb5f24', 3, '101', 'Routine', 'pass', %L)$q$, repeat('n', 4001)),
+  format($q$select * from public.create_inspection('d0000000-0000-4000-8000-000000000010', '5d70e438bb6045d6b3af05aee061e3cd', 0, '900001', 'Routine', 'pass', %L)$q$, repeat('n', 4001)),
   'P0001', 'invalid_input:notes');
 select tests.expect_error('10 array snapshot',
-  $q$select * from public.create_inspection('d0000000-0000-4000-8000-000000000010', 'cc6a7a27c267435c8f7ed95a59eb5f24', 3, '101', 'Routine', 'pass', null, '[]')$q$,
+  $q$select * from public.create_inspection('d0000000-0000-4000-8000-000000000010', '5d70e438bb6045d6b3af05aee061e3cd', 0, '900001', 'Routine', 'pass', null, '[]')$q$,
   'P0001', 'invalid_input:displayed_snapshot');
 select tests.expect_error('10 snapshot over 16 KB',
-  format($q$select * from public.create_inspection('d0000000-0000-4000-8000-000000000010', 'cc6a7a27c267435c8f7ed95a59eb5f24', 3, '101', 'Routine', 'pass', null, %L)$q$,
+  format($q$select * from public.create_inspection('d0000000-0000-4000-8000-000000000010', '5d70e438bb6045d6b3af05aee061e3cd', 0, '900001', 'Routine', 'pass', null, %L)$q$,
     jsonb_build_object('big', repeat('s', 16400))),
   'P0001', 'invalid_input:displayed_snapshot');
 select tests.expect_error('10 object id abc',
-  $q$select * from public.create_inspection('d0000000-0000-4000-8000-000000000010', 'cc6a7a27c267435c8f7ed95a59eb5f24', 3, 'abc', 'Routine', 'pass')$q$,
+  $q$select * from public.create_inspection('d0000000-0000-4000-8000-000000000010', '5d70e438bb6045d6b3af05aee061e3cd', 0, 'abc', 'Routine', 'pass')$q$,
   'P0001', 'invalid_input:object_id');
 select tests.expect_error('10 object id leading zero',
-  $q$select * from public.create_inspection('d0000000-0000-4000-8000-000000000010', 'cc6a7a27c267435c8f7ed95a59eb5f24', 3, '042', 'Routine', 'pass')$q$,
+  $q$select * from public.create_inspection('d0000000-0000-4000-8000-000000000010', '5d70e438bb6045d6b3af05aee061e3cd', 0, '042', 'Routine', 'pass')$q$,
   'P0001', 'invalid_input:object_id');
 select tests.expect_error('10 null draft id',
-  $q$select * from public.create_inspection(null, 'cc6a7a27c267435c8f7ed95a59eb5f24', 3, '101', 'Routine', 'pass')$q$,
+  $q$select * from public.create_inspection(null, '5d70e438bb6045d6b3af05aee061e3cd', 0, '900001', 'Routine', 'pass')$q$,
   'P0001', 'invalid_input:draft_id');
 select tests.expect_error('10 wrong source item',
-  $q$select * from public.create_inspection('d0000000-0000-4000-8000-000000000010', 'ffffffffffffffffffffffffffffffff', 3, '101', 'Routine', 'pass')$q$,
+  $q$select * from public.create_inspection('d0000000-0000-4000-8000-000000000010', 'ffffffffffffffffffffffffffffffff', 0, '900001', 'Routine', 'pass')$q$,
   'P0001', 'unknown_source');
-select tests.expect_error('10 layer 2',
-  $q$select * from public.create_inspection('d0000000-0000-4000-8000-000000000010', 'cc6a7a27c267435c8f7ed95a59eb5f24', 2, '101', 'Routine', 'pass')$q$,
+select tests.expect_error('10 layer 1',
+  $q$select * from public.create_inspection('d0000000-0000-4000-8000-000000000010', '5d70e438bb6045d6b3af05aee061e3cd', 1, '900001', 'Routine', 'pass')$q$,
+  'P0001', 'unknown_source');
+-- The old layer (item cc6a7a27…, layer 3) is refused for saving and for history.
+select tests.expect_error('10 old layer create',
+  $q$select * from public.create_inspection('d0000000-0000-4000-8000-000000000010', 'cc6a7a27c267435c8f7ed95a59eb5f24', 3, '900001', 'Routine', 'pass')$q$,
+  'P0001', 'unknown_source');
+select tests.expect_error('10 old layer my_inspections',
+  $q$select * from public.my_inspections('cc6a7a27c267435c8f7ed95a59eb5f24', 3, '101')$q$,
+  'P0001', 'unknown_source');
+select tests.expect_error('10 wrong layer my_inspections',
+  $q$select * from public.my_inspections('5d70e438bb6045d6b3af05aee061e3cd', 1, '900001')$q$,
   'P0001', 'unknown_source');
 
 -- Case 10 boundaries: 120-char type and 4,000-char notes are accepted; empty notes become null.
@@ -157,10 +177,10 @@ do $$
 declare r record;
 begin
   select * into strict r from public.create_inspection(
-    'd0000000-0000-4000-8000-000000000011', 'cc6a7a27c267435c8f7ed95a59eb5f24', 3, '103',
+    'd0000000-0000-4000-8000-000000000011', '5d70e438bb6045d6b3af05aee061e3cd', 0, '900003',
     repeat('t', 120), 'fail', repeat('n', 4000));
   select * into strict r from public.create_inspection(
-    'd0000000-0000-4000-8000-000000000012', 'cc6a7a27c267435c8f7ed95a59eb5f24', 3, '103',
+    'd0000000-0000-4000-8000-000000000012', '5d70e438bb6045d6b3af05aee061e3cd', 0, '900003',
     'Routine', 'Fail', '   ');
   if (select i.notes from public.inspections i where i.id = 'd0000000-0000-4000-8000-000000000012') is not null then
     raise exception 'TEST FAILED: 10 blank notes should be stored as null';
@@ -169,7 +189,7 @@ end $$;
 
 -- Case 11: A cannot write to either table directly.
 select tests.expect_error('11 insert assets',
-  $q$insert into public.assets (source_item, layer_id, source_object_id) values ('cc6a7a27c267435c8f7ed95a59eb5f24', 3, '999')$q$, '42501');
+  $q$insert into public.assets (source_item, layer_id, source_object_id) values ('5d70e438bb6045d6b3af05aee061e3cd', 0, '900009')$q$, '42501');
 select tests.expect_error('11 update assets', $q$update public.assets set dataset_version = 'x'$q$, '42501');
 select tests.expect_error('11 delete assets', 'delete from public.assets', '42501');
 select tests.expect_error('11 truncate assets', 'truncate public.assets cascade', '42501');
@@ -186,13 +206,13 @@ reset role;
 -- Case 7: B reuses A's draft ID with the same content.
 select tests.act_as('00000000-0000-4000-a000-00000000000b', 'test-b@umbc.edu');
 select tests.expect_error('7 other user reuses draft id',
-  $q$select * from public.create_inspection('d0000000-0000-4000-8000-000000000001', 'cc6a7a27c267435c8f7ed95a59eb5f24', 3, '101', 'Routine', 'pass', 'first note')$q$,
+  $q$select * from public.create_inspection('d0000000-0000-4000-8000-000000000001', '5d70e438bb6045d6b3af05aee061e3cd', 0, '900001', 'Routine', 'pass', 'first note')$q$,
   '23505', 'draft_conflict');
 
 -- Case 8: B sees none of A's rows.
 do $$
 begin
-  if exists (select 1 from public.my_inspections('cc6a7a27c267435c8f7ed95a59eb5f24', 3, '101')) then
+  if exists (select 1 from public.my_inspections('5d70e438bb6045d6b3af05aee061e3cd', 0, '900001')) then
     raise exception 'TEST FAILED: 8 B history shows rows';
   end if;
   if exists (select 1 from public.inspections) then
@@ -206,20 +226,20 @@ select tests.act_as('00000000-0000-4000-a000-00000000000a', 'test-a@umbc.edu');
 do $$
 declare ids uuid[];
 begin
-  perform * from public.create_inspection('d0000000-0000-4000-8000-000000000002', 'cc6a7a27c267435c8f7ed95a59eb5f24', 3, '101', 'Follow-up', 'fail');
-  perform * from public.create_inspection('d0000000-0000-4000-8000-000000000003', 'cc6a7a27c267435c8f7ed95a59eb5f24', 3, '102', 'Routine', 'pass');
+  perform * from public.create_inspection('d0000000-0000-4000-8000-000000000002', '5d70e438bb6045d6b3af05aee061e3cd', 0, '900001', 'Follow-up', 'fail');
+  perform * from public.create_inspection('d0000000-0000-4000-8000-000000000003', '5d70e438bb6045d6b3af05aee061e3cd', 0, '900002', 'Routine', 'pass');
 
-  select array_agg(h.id) into ids from public.my_inspections('cc6a7a27c267435c8f7ed95a59eb5f24', 3, '101') h;
+  select array_agg(h.id) into ids from public.my_inspections('5d70e438bb6045d6b3af05aee061e3cd', 0, '900001') h;
   if ids is distinct from array['d0000000-0000-4000-8000-000000000002', 'd0000000-0000-4000-8000-000000000001']::uuid[] then
-    raise exception 'TEST FAILED: 9 history 101 wrong rows or order: %', ids;
+    raise exception 'TEST FAILED: 9 history 900001 wrong rows or order: %', ids;
   end if;
-  if (select count(*) from public.my_inspections('cc6a7a27c267435c8f7ed95a59eb5f24', 3, '102')) <> 1 then
-    raise exception 'TEST FAILED: 9 history 102 should have 1 row';
+  if (select count(*) from public.my_inspections('5d70e438bb6045d6b3af05aee061e3cd', 0, '900002')) <> 1 then
+    raise exception 'TEST FAILED: 9 history 900002 should have 1 row';
   end if;
-  if (select count(*) from public.my_inspections('cc6a7a27c267435c8f7ed95a59eb5f24', 3, '101', 0)) <> 1 then
+  if (select count(*) from public.my_inspections('5d70e438bb6045d6b3af05aee061e3cd', 0, '900001', 0)) <> 1 then
     raise exception 'TEST FAILED: 9 limit 0 should clamp to 1';
   end if;
-  if exists (select 1 from public.my_inspections('cc6a7a27c267435c8f7ed95a59eb5f24', 3, '555')) then
+  if exists (select 1 from public.my_inspections('5d70e438bb6045d6b3af05aee061e3cd', 0, '900009')) then
     raise exception 'TEST FAILED: 9 never-inspected feature should be empty';
   end if;
 end $$;
@@ -228,12 +248,12 @@ reset role;
 -- Case 2: Gmail user C is refused and reads nothing.
 select tests.act_as('00000000-0000-4000-a000-00000000000c', 'test-c@gmail.com');
 select tests.expect_error('2 gmail create',
-  $q$select * from public.create_inspection('d0000000-0000-4000-8000-000000000020', 'cc6a7a27c267435c8f7ed95a59eb5f24', 3, '101', 'Routine', 'pass')$q$,
+  $q$select * from public.create_inspection('d0000000-0000-4000-8000-000000000020', '5d70e438bb6045d6b3af05aee061e3cd', 0, '900001', 'Routine', 'pass')$q$,
   '42501', 'forbidden_domain');
 do $$
 begin
   if exists (select 1 from public.inspections) or exists (select 1 from public.assets)
-     or exists (select 1 from public.my_inspections('cc6a7a27c267435c8f7ed95a59eb5f24', 3, '101')) then
+     or exists (select 1 from public.my_inspections('5d70e438bb6045d6b3af05aee061e3cd', 0, '900001')) then
     raise exception 'TEST FAILED: 2 gmail user reads rows';
   end if;
 end $$;
@@ -242,7 +262,7 @@ reset role;
 -- Case 3: unconfirmed UMBC user D is refused and reads nothing.
 select tests.act_as('00000000-0000-4000-a000-00000000000d', 'test-d@umbc.edu');
 select tests.expect_error('3 unconfirmed create',
-  $q$select * from public.create_inspection('d0000000-0000-4000-8000-000000000030', 'cc6a7a27c267435c8f7ed95a59eb5f24', 3, '101', 'Routine', 'pass')$q$,
+  $q$select * from public.create_inspection('d0000000-0000-4000-8000-000000000030', '5d70e438bb6045d6b3af05aee061e3cd', 0, '900001', 'Routine', 'pass')$q$,
   '42501', 'forbidden_domain');
 do $$
 begin
@@ -253,7 +273,7 @@ reset role;
 -- Case 3b: anonymous account with a UMBC email is refused.
 select tests.act_as('00000000-0000-4000-a000-00000000000e', 'test-e@umbc.edu');
 select tests.expect_error('3b anonymous create',
-  $q$select * from public.create_inspection('d0000000-0000-4000-8000-000000000031', 'cc6a7a27c267435c8f7ed95a59eb5f24', 3, '101', 'Routine', 'pass')$q$,
+  $q$select * from public.create_inspection('d0000000-0000-4000-8000-000000000031', '5d70e438bb6045d6b3af05aee061e3cd', 0, '900001', 'Routine', 'pass')$q$,
   '42501', 'forbidden_domain');
 reset role;
 
@@ -269,17 +289,19 @@ begin
       and i.inspector_id = '00000000-0000-4000-a000-00000000000a'
       and i.inspection_type = 'Routine' and i.outcome = 'pass' and i.notes = 'first note'
       and i.displayed_snapshot = '{"Facility_N": "Test pond"}'
-      and a.source_object_id = '101' and a.layer_id = 3 and a.dataset_version = 'live'
+      and a.source_object_id = '900001' and a.layer_id = 0 and a.dataset_version = 'live'
   ) then
     raise exception 'TEST FAILED: 4 stored row not normalized as expected';
   end if;
   -- A: 01, 02, 03, 11, 12. Nobody else saved anything.
-  if (select count(*) from public.inspections) <> 5 then
-    raise exception 'TEST FAILED: expected 5 inspections, got %', (select count(*) from public.inspections);
+  if (select count(*) from public.inspections) - (select (v ->> 'inspections')::bigint from tests.results where k = 'baseline') <> 5 then
+    raise exception 'TEST FAILED: expected 5 new inspections, got %',
+      (select count(*) from public.inspections) - (select (v ->> 'inspections')::bigint from tests.results where k = 'baseline');
   end if;
-  -- Features 101, 102, 103; one asset row each.
-  if (select count(*) from public.assets) <> 3 then
-    raise exception 'TEST FAILED: expected 3 assets, got %', (select count(*) from public.assets);
+  -- Features 900001, 900002, 900003; one asset row each.
+  if (select count(*) from public.assets) - (select (v ->> 'assets')::bigint from tests.results where k = 'baseline') <> 3 then
+    raise exception 'TEST FAILED: expected 3 new assets, got %',
+      (select count(*) from public.assets) - (select (v ->> 'assets')::bigint from tests.results where k = 'baseline');
   end if;
 end $$;
 
